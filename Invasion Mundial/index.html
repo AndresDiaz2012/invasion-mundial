@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dominio Global</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<!-- TOAST CONTAINER -->
+<div id="toast-container"></div>
+
+<!-- DIAGONAL CURTAIN TRANSITION -->
+<div id="screen-curtain">
+  <div class="curtain-panel curtain-panel-1"></div>
+  <div class="curtain-panel curtain-panel-2"></div>
+</div>
+
+<!-- GAME BACKGROUND PARTICLES -->
+<div id="game-particles"></div>
+
+<!-- SCREEN: TITLE -->
+<div id="screen-title" class="screen active">
+  <!-- Floating background blobs -->
+  <div class="title-blobs">
+    <div class="blob blob-1"></div>
+    <div class="blob blob-2"></div>
+    <div class="blob blob-3"></div>
+    <div class="blob blob-4"></div>
+    <div class="blob blob-5"></div>
+  </div>
+  <div class="title-content">
+    <!-- Globe with orbiting particles -->
+    <div class="globe-orbit-container">
+      <div class="title-globe">🌍</div>
+      <div class="orbit-particle"></div>
+      <div class="orbit-particle"></div>
+      <div class="orbit-particle"></div>
+      <div class="orbit-particle"></div>
+    </div>
+    <h1 class="title-main">DOMINIO GLOBAL</h1>
+    <p class="title-sub">Estrategia · Diplomacia · Guerra · Espionaje</p>
+    <div class="title-mode-btns">
+      <button id="btn-start" class="btn-primary btn-xl">🖥️ MODO LOCAL</button>
+      <button id="btn-multiplayer" class="btn-secondary btn-xl">🌐 MULTIJUGADOR</button>
+    </div>
+  </div>
+  <div class="title-grid-bg"></div>
+</div>
+
+<!-- SCREEN: LOBBY -->
+<div id="screen-lobby" class="screen" style="display:none">
+  <div id="lobby-layout">
+    <!-- LEFT: room info + players -->
+    <div id="lobby-left">
+      <div id="lobby-header">
+        <div id="lobby-title">SALA DE ESPERA</div>
+        <div id="lobby-room-info">
+          <div id="lobby-code-label">Código de sala</div>
+          <div id="lobby-code-display">——————</div>
+          <button id="lobby-copy-btn" title="Copiar código">📋 Copiar</button>
+        </div>
+        <div id="lobby-error" style="display:none;color:#d94f4f;font-size:12px;margin-top:8px"></div>
+      </div>
+      <div id="lobby-players-label">JUGADORES (<span id="lobby-count">0</span>/8)</div>
+      <div id="lobby-players"></div>
+      <div id="lobby-actions">
+        <button id="lobby-start-btn" class="btn-primary" disabled>▶ COMENZAR PARTIDA</button>
+        <button id="lobby-back-btn" class="btn-secondary">← Volver</button>
+      </div>
+    </div>
+    <!-- RIGHT: country selection -->
+    <div id="lobby-right">
+      <div id="lobby-select-label">ELIGE TU NACIÓN</div>
+      <div id="lobby-country-grid"></div>
+    </div>
+  </div>
+</div>
+
+<!-- SCREEN: COUNTRY SELECT -->
+<div id="screen-select" class="screen">
+  <div class="select-header">
+    <h2>ELIGE TU NACIÓN</h2>
+    <p class="select-sub">Cada país ofrece una experiencia única.</p>
+    <div class="difficulty-legend">
+      <span class="diff-dot easy"></span>Fácil
+      <span class="diff-dot medium"></span>Medio
+      <span class="diff-dot hard"></span>Difícil
+    </div>
+  </div>
+  <div id="select-main">
+    <div id="country-grid"></div>
+    <div id="country-detail" class="country-detail hidden">
+      <button id="btn-close-detail" class="btn-close">✕</button>
+      <div class="detail-flag" id="detail-flag"></div>
+      <h3 id="detail-name"></h3>
+      <div class="detail-region" id="detail-region"></div>
+      <div class="detail-stats" id="detail-stats"></div>
+      <div class="detail-bonus-box" id="detail-bonus"></div>
+      <div class="detail-relations" id="detail-relations"></div>
+      <button id="btn-choose" class="btn-primary btn-xl">⚑ ELEGIR ESTE PAÍS</button>
+    </div>
+  </div>
+</div>
+
+<!-- SCREEN: MAIN GAME -->
+<div id="screen-game" class="screen">
+
+  <!-- TOP HUD -->
+  <div id="hud">
+    <div id="hud-country-info" class="hud-country"></div>
+    <div class="hud-divider"></div>
+    <div class="hud-stat">
+      <span class="hud-label">TESORO</span>
+      <span class="hud-value gold" id="hud-treasury">$0B</span>
+    </div>
+    <div class="hud-stat">
+      <span class="hud-label">INGRESOS</span>
+      <span class="hud-value green" id="hud-income">+$0B</span>
+    </div>
+    <div class="hud-stat">
+      <span class="hud-label">APROBACIÓN</span>
+      <span class="hud-value" id="hud-stability">-</span>
+    </div>
+    <div class="hud-stat">
+      <span class="hud-label">TENSIÓN</span>
+      <span class="hud-value" id="hud-tension">-</span>
+    </div>
+    <div class="hud-stat">
+      <span class="hud-label">MES · AÑO</span>
+      <span class="hud-value accent" id="hud-month" style="font-size:10px;letter-spacing:.5px">Enero</span>
+      <span class="hud-value accent" id="hud-turn">2025</span>
+    </div>
+    <div class="hud-stat">
+      <span class="hud-label">PRÓXIMO AÑO</span>
+      <span class="hud-value" id="hud-timer">12:00</span>
+    </div>
+    <button id="btn-end-turn" class="btn-turn">PASAR AÑO ▶</button>
+  </div>
+
+  <!-- GAME MAIN LAYOUT -->
+  <div id="game-main">
+
+    <!-- LEFT: ACTION PANEL -->
+    <div id="side-panel">
+
+      <!-- Category toggle: INTERIOR / EXTERIOR -->
+      <div class="category-toggle">
+        <button class="cat-btn active" data-cat="internal">
+          <span class="cat-icon">🏛️</span><span class="cat-label">INTERIOR</span>
+        </button>
+        <button class="cat-btn" data-cat="external">
+          <span class="cat-icon">🌍</span><span class="cat-label">EXTERIOR</span>
+        </button>
+      </div>
+
+      <!-- Internal tabs: economy, politics, speeches, opponents, intelligence -->
+      <div class="panel-tabs" id="internal-tabs">
+        <button class="tab-btn active" data-tab="economy">💰 ECONO</button>
+        <button class="tab-btn" data-tab="internal">🏛️ POLIT</button>
+        <button class="tab-btn" data-tab="speech">🎤 CHARLA</button>
+        <button class="tab-btn" data-tab="opponents">⚠️ OPOSI<span id="hud-opponents" class="opp-badge" style="display:none">0</span></button>
+        <button class="tab-btn" data-tab="intelligence">🔍 INTEL</button>
+        <button class="tab-btn" data-tab="commitments">📋 PACTOS</button>
+        <button class="tab-btn" data-tab="industries">🏭 INDUS</button>
+        <button class="tab-btn mp-only" data-tab="technology" style="display:none">🔬 TECNO</button>
+      </div>
+
+      <!-- External tabs: diplomacy, military, espionage, recon — require a target country -->
+      <div class="panel-tabs hidden" id="external-tabs">
+        <button class="tab-btn active" data-tab="diplomacy">🤝 DIPLO</button>
+        <button class="tab-btn" data-tab="military">⚔️ MILITAR</button>
+        <button class="tab-btn" data-tab="espionage">🕵️ ESPIO</button>
+        <button class="tab-btn" data-tab="recon">🔍 INVEST</button>
+      </div>
+
+      <div class="actions-context" id="actions-context"></div>
+      <div id="action-list" class="action-list"></div>
+    </div>
+
+    <!-- CENTER: INTERACTIVE WORLD MAP -->
+    <div id="world-view">
+      <div id="map-controls">
+        <div class="map-legend">
+          <span class="leg-item player-leg">▣ Tu país</span>
+          <span class="leg-item ally-leg">▣ Aliado</span>
+          <span class="leg-item enemy-leg">▣ Hostil</span>
+          <span class="leg-item war-leg">▣ En guerra</span>
+        </div>
+        <div class="map-zoom-btns">
+          <button id="btn-zoom-in"    title="Acercar">+</button>
+          <button id="btn-zoom-reset" title="Vista global">⌂</button>
+          <button id="btn-zoom-out"   title="Alejar">−</button>
+        </div>
+      </div>
+      <div id="map-container">
+        <svg id="map-svg"></svg>
+        <div id="map-tooltip"></div>
+        <div id="map-loading"><div class="loading-spinner"></div><span>Cargando mapa mundial…</span></div>
+      </div>
+    </div>
+
+    <!-- RIGHT: INFO + LOG -->
+    <div id="right-panel">
+      <div id="country-info-panel">
+        <div id="country-info-content">
+          <div class="hint-center">
+            <div class="hint-icon">🌍</div>
+            <p>Haz clic en cualquier país del mapa para ver información</p>
+          </div>
+        </div>
+      </div>
+      <div id="event-log">
+        <div class="log-header">📋 REGISTRO DE EVENTOS</div>
+        <div id="log-entries"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- CINEMATIC EVENT MODAL (Messenger dialog-style) -->
+<div id="event-overlay" class="hidden">
+  <div id="event-card">
+    <div id="event-card-bg"></div>
+    <div id="event-card-inner">
+      <div id="event-scene">
+        <div id="event-leader-portrait">
+          <div id="event-leader-face">👤</div>
+          <div id="event-leader-label"></div>
+        </div>
+        <div id="event-type-badge"></div>
+      </div>
+      <div id="event-body">
+        <div id="event-icon-big"></div>
+        <h2 id="event-title"></h2>
+        <p id="event-desc"></p>
+        <div id="event-choices"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- DIPLOMATIC DEBATE MODAL -->
+<div id="debate-overlay" class="hidden">
+  <div id="debate-box">
+    <div id="debate-header">
+      <div id="debate-enemy-info">
+        <span id="debate-enemy-flag" class="debate-flag-big"></span>
+        <div>
+          <div id="debate-enemy-name" class="debate-name"></div>
+          <div id="debate-enemy-title" class="debate-title"></div>
+        </div>
+      </div>
+      <button id="debate-close" class="btn-secondary">✕ Abandonar</button>
+    </div>
+    <div id="debate-messages"></div>
+    <div id="debate-thinking" class="hidden debate-thinking">💭 Pensando…</div>
+    <div id="debate-treaty-area" class="hidden">
+      <div class="debate-treaty-label">— PROPONER TRATADO —</div>
+      <div id="debate-treaty-btns">
+        <button class="treaty-btn" data-type="peace">🕊️ Paz</button>
+        <button class="treaty-btn" data-type="alliance">🤝 Alianza</button>
+        <button class="treaty-btn" data-type="trade">💱 Comercio</button>
+        <button class="treaty-btn" data-type="aid">💰 Pedir Ayuda</button>
+      </div>
+    </div>
+    <div id="debate-input-area">
+      <textarea id="debate-input" rows="2" placeholder="Escribe tu argumento diplomático…"></textarea>
+      <button id="debate-send">Enviar ➤</button>
+    </div>
+    <div id="debate-finalize-bar">
+      <button id="debate-finalize-btn">🏁 Finalizar Negociación</button>
+    </div>
+  </div>
+</div>
+
+<!-- MP: DIPLOMACY CHAT MODAL -->
+<div id="mp-chat-overlay" class="hidden" data-to="">
+  <div id="mp-chat-box">
+    <div id="mp-chat-header">
+      <div id="mp-chat-title">Chat Diplomático</div>
+      <div id="mp-chat-header-btns">
+        <button id="mp-intercept-btn" title="Ver mensajes interceptados">🕵️ Interceptados</button>
+        <button id="mp-chat-close">✕</button>
+      </div>
+    </div>
+    <div id="mp-chat-messages"></div>
+    <!-- Negotiation toolbar -->
+    <div id="mp-neg-toolbar">
+      <button class="neg-tool-btn" id="neg-btn-treaty"  title="Proponer Tratado">📜 Tratado</button>
+      <button class="neg-tool-btn" id="neg-btn-trade"   title="Iniciar Comercio">🤝 Comercio</button>
+      <button class="neg-tool-btn" id="neg-btn-loan"    title="Solicitar Préstamo">💰 Préstamo</button>
+    </div>
+    <div id="mp-chat-input-row">
+      <textarea id="mp-chat-input" rows="2" placeholder="Escribe tu mensaje diplomático…"></textarea>
+      <button id="mp-chat-send">Enviar ➤</button>
+    </div>
+  </div>
+</div>
+
+<!-- TREATY MODAL (parchment) -->
+<div id="treaty-overlay" class="hidden">
+  <div id="treaty-paper">
+    <div class="treaty-scroll-deco top">⁓⁓⁓⁓⁓⁓⁓⁓⁓⁓⁓⁓⁓⁓⁓⁓⁓⁓⁓⁓⁓</div>
+    <div id="treaty-header">
+      <div id="treaty-seals">
+        <div class="treaty-seal" id="treaty-seal-a">🔴</div>
+        <div class="treaty-title-block">
+          <div class="treaty-subtitle">TRATADO DIPLOMÁTICO OFICIAL</div>
+          <div id="treaty-parties"></div>
+        </div>
+        <div class="treaty-seal" id="treaty-seal-b">🔵</div>
+      </div>
+    </div>
+
+    <!-- EDITOR VIEW (proposer fills terms) -->
+    <div id="treaty-editor">
+      <div class="treaty-section">
+        <label class="treaty-label">📋 Lo que se obtiene <span class="req">*</span></label>
+        <select id="treaty-obtained">
+          <option value="">— Seleccionar —</option>
+          <option value="alliance">🤝 Alianza Formal</option>
+          <option value="economic_aid">💰 Ayuda Económica</option>
+          <option value="military_aid">⚔️ Apoyo Militar</option>
+          <option value="protection">🛡️ Protección en Guerra</option>
+          <option value="trade_deal">📦 Acuerdo Comercial</option>
+          <option value="peace">🕊️ Paz / No Agresión</option>
+          <option value="custom">✏️ Acuerdo personalizado</option>
+        </select>
+        <textarea id="treaty-obtained-desc" placeholder="Describe los detalles del acuerdo…" rows="2"></textarea>
+      </div>
+
+      <div class="treaty-section">
+        <label class="treaty-label">📝 Compromisos</label>
+        <div class="treaty-commitment-row">
+          <select class="commitment-who" id="commit-who-1">
+            <option value="me">Mi país</option>
+            <option value="them">País objetivo</option>
+            <option value="both">Ambos países</option>
+          </select>
+          <input type="text" class="commitment-text" id="commit-text-1" placeholder="Se compromete a…">
+        </div>
+        <div class="treaty-commitment-row" id="commit-row-2" style="display:none">
+          <select class="commitment-who" id="commit-who-2">
+            <option value="me">Mi país</option>
+            <option value="them">País objetivo</option>
+            <option value="both">Ambos países</option>
+          </select>
+          <input type="text" class="commitment-text" id="commit-text-2" placeholder="Se compromete a…">
+        </div>
+        <button class="treaty-add-commit" id="treaty-add-commit-btn">+ Agregar compromiso</button>
+      </div>
+
+      <div class="treaty-section">
+        <label class="treaty-label">⏳ Plazo de cumplimiento <span class="optional">(opcional)</span></label>
+        <div class="treaty-deadline-row">
+          <input type="number" id="treaty-deadline" min="1" max="100" placeholder="N° de turnos">
+          <span class="treaty-unit">turnos</span>
+        </div>
+        <div class="treaty-deadline-penalty-row" id="treaty-penalty-row" style="display:none">
+          <label class="treaty-label-small">⚠️ Condición si no se cumple el plazo:</label>
+          <input type="text" id="treaty-penalty" placeholder="Ej: declaración de guerra, devolución de tropas…">
+        </div>
+      </div>
+
+      <div class="treaty-actions">
+        <button class="treaty-btn treaty-btn-cancel" id="treaty-cancel">Cancelar</button>
+        <button class="treaty-btn treaty-btn-propose" id="treaty-propose">📜 Proponer Tratado</button>
+      </div>
+    </div>
+
+    <!-- VIEWER VIEW (receiver sees treaty to sign/counter) -->
+    <div id="treaty-viewer" class="hidden">
+      <div id="treaty-view-content"></div>
+      <div class="treaty-actions">
+        <button class="treaty-btn treaty-btn-cancel" id="treaty-reject">❌ Rechazar</button>
+        <button class="treaty-btn treaty-btn-counter" id="treaty-counter">✏️ Contraproponer</button>
+        <button class="treaty-btn treaty-btn-sign" id="treaty-sign">✍️ Firmar Tratado</button>
+      </div>
+    </div>
+
+    <!-- SIGNING ANIMATION -->
+    <div id="treaty-signing" class="hidden">
+      <div class="signing-scene">
+        <div class="signing-hand signing-left">🤝</div>
+        <div class="signing-paper-icon">📜</div>
+        <div class="signing-hand signing-right">🤝</div>
+      </div>
+      <div class="signing-text">¡Tratado Firmado!</div>
+      <div class="signing-stamp">✅</div>
+    </div>
+
+    <div class="treaty-scroll-deco bottom">⁓⁓⁓⁓⁓⁓⁓⁓⁓⁓⁓⁓⁓⁓⁓⁓⁓⁓⁓⁓⁓</div>
+  </div>
+</div>
+
+<!-- TRADE MODAL -->
+<div id="trade-overlay" class="hidden">
+  <div id="trade-window">
+    <div id="trade-header">
+      <span id="trade-title">🤝 Mesa de Comercio</span>
+      <button id="trade-close">✕</button>
+    </div>
+    <div id="trade-body">
+      <div class="trade-side" id="trade-my-side">
+        <div class="trade-side-title" id="trade-my-label">Mis Ofertas</div>
+        <div class="trade-offers-form" id="trade-my-form">
+          <div class="trade-row"><span class="trade-icon">💰</span><label>Dinero ($B)</label><input type="number" id="to-money" min="0" value="0"></div>
+          <div class="trade-row"><span class="trade-icon">🪖</span><label>Tropas</label><input type="number" id="to-troops" min="0" value="0"></div>
+          <div class="trade-row"><span class="trade-icon">✈️</span><label>Bombarderos</label><input type="number" id="to-aerial" min="0" value="0"></div>
+          <div class="trade-row"><span class="trade-icon">⚓</span><label>Flota Naval</label><input type="number" id="to-naval" min="0" value="0"></div>
+          <div class="trade-row"><span class="trade-icon">🚀</span><label>Misiles</label><input type="number" id="to-missiles" min="0" value="0"></div>
+        </div>
+        <div id="trade-my-status" class="trade-status"></div>
+      </div>
+      <div class="trade-divider">⇄</div>
+      <div class="trade-side" id="trade-their-side">
+        <div class="trade-side-title" id="trade-their-label">Oferta del otro jugador</div>
+        <div id="trade-their-offer" class="trade-their-content">
+          <div class="trade-waiting">Esperando oferta…</div>
+        </div>
+      </div>
+    </div>
+    <div id="trade-actions">
+      <button class="trade-btn trade-reject" id="trade-btn-reject">❌ Rechazar</button>
+      <button class="trade-btn trade-more" id="trade-btn-more">🔄 Pedir más</button>
+      <button class="trade-btn trade-propose" id="trade-btn-propose">📤 Proponer</button>
+      <button class="trade-btn trade-accept" id="trade-btn-accept" disabled>✅ Aceptar</button>
+    </div>
+  </div>
+</div>
+
+<!-- LOAN MODAL -->
+<div id="loan-overlay" class="hidden">
+  <div id="loan-window">
+    <div id="loan-header">
+      <span id="loan-title">💰 Solicitud de Préstamo</span>
+      <button id="loan-close">✕</button>
+    </div>
+    <div id="loan-body">
+      <div id="loan-editor">
+        <div class="loan-section">
+          <label class="loan-label">Soy el <select id="loan-role">
+            <option value="lender">Prestamista (doy el préstamo)</option>
+            <option value="borrower">Prestatario (solicito el préstamo)</option>
+          </select></label>
+        </div>
+        <div class="loan-section">
+          <label class="loan-label">💰 Monto del préstamo ($B)</label>
+          <input type="number" id="loan-amount" min="1" value="100">
+        </div>
+        <div class="loan-section">
+          <label class="loan-label">⏳ Plazo de devolución (turnos)</label>
+          <input type="number" id="loan-turns" min="1" value="10">
+        </div>
+        <div class="loan-section">
+          <label class="loan-label">⚠️ Condición si no se paga a tiempo</label>
+          <select id="loan-penalty-type">
+            <option value="war">Declaración de guerra</option>
+            <option value="troops">Transferencia de tropas</option>
+            <option value="aerial">Transferencia de bombarderos</option>
+            <option value="naval">Transferencia de flota naval</option>
+            <option value="custom">Condición personalizada</option>
+          </select>
+          <div id="loan-penalty-detail-row">
+            <input type="number" id="loan-penalty-amount" min="0" value="0" placeholder="Cantidad (si aplica)">
+            <input type="text"   id="loan-penalty-custom" placeholder="Descripción personalizada" style="display:none">
+          </div>
+        </div>
+        <div class="loan-actions">
+          <button class="loan-btn loan-cancel" id="loan-cancel">Cancelar</button>
+          <button class="loan-btn loan-propose" id="loan-propose">💰 Proponer Préstamo</button>
+        </div>
+      </div>
+
+      <!-- Viewer for receiving player -->
+      <div id="loan-viewer" class="hidden">
+        <div id="loan-view-content"></div>
+        <div class="loan-actions">
+          <button class="loan-btn loan-cancel" id="loan-reject">❌ Rechazar</button>
+          <button class="loan-btn loan-propose" id="loan-accept">✅ Aceptar Préstamo</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MP: INTERCEPTED MESSAGES PANEL -->
+<div id="intercept-panel" class="hidden">
+  <div id="intercept-header">
+    <span>🕵️ MENSAJES INTERCEPTADOS</span>
+    <button id="intercept-close">✕</button>
+  </div>
+  <div id="intercept-list"></div>
+</div>
+
+<!-- MP: JOIN ROOM MODAL -->
+<div id="mp-join-overlay" class="hidden">
+  <div id="mp-join-box">
+    <div id="mp-join-title">🌐 UNIRSE A SALA</div>
+    <label>Tu nombre</label>
+    <input id="mp-join-name" type="text" placeholder="Ej: Andres" maxlength="20">
+    <label>Código de sala</label>
+    <input id="mp-join-code" type="text" placeholder="Pega el código aquí">
+    <div id="mp-join-error" style="display:none;color:#d94f4f;font-size:12px"></div>
+    <div id="mp-join-btns">
+      <button id="mp-join-confirm" class="btn-primary">Unirse</button>
+      <button id="mp-join-cancel" class="btn-secondary">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MP: CREATE ROOM MODAL -->
+<div id="mp-create-overlay" class="hidden">
+  <div id="mp-join-box">
+    <div id="mp-join-title">🌐 CREAR SALA</div>
+    <label>Tu nombre</label>
+    <input id="mp-create-name" type="text" placeholder="Ej: Andres" maxlength="20">
+    <div id="mp-create-error" style="display:none;color:#d94f4f;font-size:12px"></div>
+    <div id="mp-join-btns">
+      <button id="mp-create-confirm" class="btn-primary">Crear sala</button>
+      <button id="mp-create-cancel" class="btn-secondary">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- AID TYPE MODAL -->
+<div id="aid-overlay" class="hidden">
+  <div id="aid-box">
+    <div id="aid-title">🤲 ENVIAR AYUDA</div>
+    <div id="aid-target-info"></div>
+    <div id="aid-types">
+      <div class="aid-type-card selected" data-type="economic">
+        <div class="aid-icon">💰</div>
+        <div class="aid-type-name">Económica</div>
+        <div class="aid-type-desc">Mejora economía y relaciones</div>
+      </div>
+      <div class="aid-type-card" data-type="military">
+        <div class="aid-icon">⚔️</div>
+        <div class="aid-type-name">Militar</div>
+        <div class="aid-type-desc">Equipo y entrenamiento</div>
+      </div>
+      <div class="aid-type-card" data-type="medicine">
+        <div class="aid-icon">💊</div>
+        <div class="aid-type-name">Médica</div>
+        <div class="aid-type-desc">Mejora estabilidad</div>
+      </div>
+      <div class="aid-type-card" data-type="food">
+        <div class="aid-icon">🌾</div>
+        <div class="aid-type-name">Alimentaria</div>
+        <div class="aid-type-desc">Estabilidad + relaciones</div>
+      </div>
+    </div>
+    <div id="aid-amount-row">
+      <label>Cantidad: <strong id="aid-amount-label">$40B</strong></label>
+      <input type="range" id="aid-amount" min="10" max="200" step="10" value="40">
+    </div>
+    <div id="aid-preview"></div>
+    <div id="aid-btns">
+      <button id="aid-confirm" class="btn-primary">Enviar Ayuda</button>
+      <button id="aid-cancel" class="btn-secondary">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- PRESS CONFERENCE MODAL -->
+<div id="pressconf-overlay" class="hidden">
+  <div id="pressconf-box">
+    <div id="pressconf-stage">
+      <div id="pressconf-crowd">👥👥👥👥👥👥👥👥👥👥👥👥</div>
+      <div id="pressconf-spotlights"><div class="spot left"></div><div class="spot right"></div></div>
+      <div id="pressconf-podium">
+        <div id="pressconf-flag"></div>
+        <div id="pressconf-leader-name"></div>
+      </div>
+    </div>
+    <div id="pressconf-mood-bar">
+      <div id="pressconf-mood-fill"></div>
+    </div>
+    <div id="pressconf-journalist">
+      <div id="pressconf-journalist-icon">📰</div>
+      <div id="pressconf-journalist-name"></div>
+    </div>
+    <div id="pressconf-question-box">
+      <div id="pressconf-question-text"></div>
+    </div>
+    <div id="pressconf-reaction" class="hidden"></div>
+    <div id="pressconf-input-area">
+      <textarea id="pressconf-input" rows="3" placeholder="Escribe tu respuesta presidencial…"></textarea>
+      <button id="pressconf-send">Responder ➤</button>
+    </div>
+    <div id="pressconf-progress">Pregunta <span id="pressconf-q-num">1</span> de 3</div>
+  </div>
+</div>
+
+<!-- ACTION MODAL -->
+<div id="modal-overlay" class="hidden">
+  <div id="modal-box">
+    <div id="modal-icon"></div>
+    <div id="modal-header"></div>
+    <div id="modal-body"></div>
+    <div id="modal-choices"></div>
+    <div id="modal-footer">
+      <button id="modal-close" class="btn-secondary">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- SPEECH MODAL -->
+<div id="speech-overlay" class="hidden">
+  <div id="speech-box">
+
+    <!-- DELIVER STEP -->
+    <div id="speech-step-deliver" class="speech-step">
+      <div id="speech-crowd" class="speech-crowd">👥👥👥👥👥</div>
+      <div class="speech-podium">🎤</div>
+      <div id="speech-topic-name" class="speech-topic-name"></div>
+      <div id="speech-quote-text" class="speech-quote-text"></div>
+      <div class="speech-progress-wrap">
+        <div id="speech-progress-bar" class="speech-progress-bar"></div>
+      </div>
+      <p class="speech-wait-hint">Transmitiendo en vivo…</p>
+    </div>
+
+    <!-- RESULT STEP -->
+    <div id="speech-step-result" class="speech-step hidden">
+      <div id="speech-result-icon" class="speech-result-icon"></div>
+      <h2 id="speech-result-title" class="speech-result-title"></h2>
+      <div id="speech-result-effects" class="speech-result-effects"></div>
+      <div id="speech-complications"></div>
+      <button id="speech-close-btn" class="btn-primary btn-xl" style="margin-top:20px">Continuar</button>
+    </div>
+
+  </div>
+</div>
+
+<!-- GAME OVER -->
+<div id="gameover-overlay" class="hidden">
+  <div id="gameover-box">
+    <div id="gameover-icon"></div>
+    <h2 id="gameover-title"></h2>
+    <p id="gameover-desc"></p>
+    <div id="gameover-stats"></div>
+    <button id="btn-restart" class="btn-primary btn-xl">NUEVA PARTIDA</button>
+  </div>
+</div>
+
+<script src="https://unpkg.com/mqtt@4.3.7/dist/mqtt.min.js"></script>
+<script src="js/d3.min.js"></script>
+<script src="js/topojson.min.js"></script>
+<script src="js/world-data.js"></script>
+<script src="js/sounds.js"></script>
+<script src="js/countries.js"></script>
+<script src="js/events.js"></script>
+<script src="js/leaders.js"></script>
+<script src="js/game.js"></script>
+<script src="js/actions.js"></script>
+<script src="js/politics.js"></script>
+<script src="js/war.js"></script>
+<script src="js/war_mp.js"></script>
+<script src="js/gemini.js"></script>
+<script src="js/anim.js"></script>
+<script src="js/map.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/negotiation.js"></script>
+<script src="js/multiplayer.js"></script>
+<script src="js/main.js"></script>
+
+<!-- Keyboard shortcut hint -->
+<div id="shortcut-hint">
+  1-7 pestañas · Q-R externas · Tab panel · Z/X zoom · C centrar · Esc volver
+</div>
+</body>
+</html>

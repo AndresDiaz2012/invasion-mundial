@@ -189,7 +189,7 @@ const NEG = {
     const deadlineNum = parseInt(document.getElementById('treaty-deadline').value) || null;
     const deadlineUnit = document.getElementById('treaty-deadline-unit').value || 'months';
     const deadline = deadlineNum ? { value: deadlineNum, unit: deadlineUnit } : null;
-    const penalty  = deadline ? (document.getElementById('treaty-penalty').value.trim() || null) : null;
+    const penalty  = deadline ? (document.getElementById('treaty-penalty').value || 'none') : null;
 
     const terms = { obtained, obtainedDesc, commitments, deadline, penalty };
     const id = 'treaty_' + Date.now();
@@ -250,13 +250,22 @@ const NEG = {
       </div>`;
     }).join('');
 
+    const PENALTY_VIEW_LABELS = {
+      war:           '⚔️ Declaración de guerra',
+      break_alliance:'💔 Ruptura de alianza',
+      sanctions:     '💸 Sanciones económicas',
+      none:          '',
+    };
     const deadlineHTML = (() => {
       if (!terms.deadline) return '';
       const dl = typeof terms.deadline === 'object' ? terms.deadline : { value: terms.deadline, unit: 'months' };
       const unitLabel = dl.unit === 'years' ? 'años' : 'meses';
+      const penLabel = (terms.penalty && terms.penalty !== 'none')
+        ? (PENALTY_VIEW_LABELS[terms.penalty] || terms.penalty)
+        : '';
       return `<div class="treaty-view-field">
         <div class="treaty-view-label">⏳ Plazo</div>
-        <div class="treaty-view-val">${dl.value} ${unitLabel}${terms.penalty ? ` · ⚠️ ${terms.penalty}` : ''}</div>
+        <div class="treaty-view-val">${dl.value} ${unitLabel}${penLabel ? ` · ⚠️ ${penLabel}` : ''}</div>
       </div>`;
     })();
 
@@ -884,20 +893,24 @@ const NEG = {
     }
     game.changeRelation(fromId, targetId, 25);
 
-    // Save as commitment
+    // Save as commitment for deadline enforcement
     if (!game.commitments) game.commitments = [];
-    const deadline = terms.deadline
-      ? { turns: terms.deadline, penalty: terms.penalty, startTurn: game.turn }
-      : null;
-    game.commitments.push({
-      type: 'treaty', id: 'treaty_' + Date.now(),
-      parties: [fromId, targetId],
-      obtained: terms.obtained,
-      description: NEG.OBTAINED_LABELS[terms.obtained] || terms.obtained,
-      commitments: terms.commitments,
-      deadline,
-      turn: game.turn,
-    });
+    if (terms.deadline) {
+      const dl = terms.deadline; // { value, unit }
+      const months = dl.unit === 'years' ? dl.value * 12 : dl.value;
+      const deadlineMonth = (game.year * 12 + (game.month || 0)) + months;
+      game.commitments.push({
+        type: 'neg_treaty',
+        id: 'treaty_' + Date.now(),
+        fromId, targetId,
+        obtained: terms.obtained,
+        description: NEG.OBTAINED_LABELS[terms.obtained] || terms.obtained,
+        commitments: terms.commitments,
+        deadlineMonth,
+        penaltyType: terms.penalty || 'none',
+        status: 'active',
+      });
+    }
 
     game.addLog(`📜 Tratado firmado: ${NEG.OBTAINED_LABELS[terms.obtained] || terms.obtained} entre ${fromC.flag} ${fromC.name} y ${toC.flag} ${toC.name}.`, 'success');
   },
@@ -1006,6 +1019,44 @@ const NEG = {
     picker.querySelector('#lrp-offer').onclick   = () => send('lender');
     picker.querySelector('#lrp-request').onclick  = () => send('borrower');
     picker.querySelector('#lrp-cancel').onclick   = () => picker.remove();
+  },
+
+  // ─────────────────────────────────────────────────────────
+  // TREATY DEADLINE ENFORCEMENT (called from game.nextMonth)
+  // ─────────────────────────────────────────────────────────
+
+  _checkTreatyDeadlines(game) {
+    if (!game.commitments?.length) return;
+    const now = game.year * 12 + (game.month || 0);
+    for (const c of game.commitments) {
+      if (c.type !== 'neg_treaty' || c.status !== 'active') continue;
+      if (c.deadlineMonth == null || now < c.deadlineMonth) continue;
+      c.status = 'expired';
+      const fromC = game.countries[c.fromId];
+      const toC   = game.countries[c.targetId];
+      const fromName = fromC ? `${fromC.flag} ${fromC.name}` : c.fromId;
+      const toName   = toC   ? `${toC.flag} ${toC.name}`     : c.targetId;
+      const pt = c.penaltyType || 'none';
+      if (pt === 'war') {
+        game.changeRelation(c.fromId, c.targetId, -50);
+        game.addLog(`⚔️ Plazo vencido del tratado entre ${fromName} y ${toName}: relaciones rotas. ¡Conflicto inminente!`, 'danger');
+      } else if (pt === 'break_alliance') {
+        if (fromC) fromC.allies = (fromC.allies || []).filter(id => id !== c.targetId);
+        if (toC)   toC.allies   = (toC.allies   || []).filter(id => id !== c.fromId);
+        game.changeRelation(c.fromId, c.targetId, -30);
+        game.addLog(`💔 Plazo vencido del tratado entre ${fromName} y ${toName}: alianza disuelta.`, 'warning');
+      } else if (pt === 'sanctions') {
+        game.changeRelation(c.fromId, c.targetId, -25);
+        const SANC = 30;
+        if (game.playerTreasuries) {
+          if (game.playerTreasuries[c.fromId]    != null) game.playerTreasuries[c.fromId]    = Math.max(0, game.playerTreasuries[c.fromId]    - SANC);
+          if (game.playerTreasuries[c.targetId]  != null) game.playerTreasuries[c.targetId]  = Math.max(0, game.playerTreasuries[c.targetId]  - SANC);
+        }
+        game.addLog(`💸 Plazo vencido del tratado entre ${fromName} y ${toName}: sanciones de $${SANC}B activadas.`, 'warning');
+      } else {
+        game.addLog(`📋 Tratado entre ${fromName} y ${toName} expiró sin consecuencias.`, 'info');
+      }
+    }
   },
 
   // ─────────────────────────────────────────────────────────

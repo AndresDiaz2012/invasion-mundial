@@ -605,7 +605,10 @@ const MP = {
               if (typeof UI !== 'undefined') UI.showToast(`❌ ${nd.fromFlag} ${nd.fromName} rechazó la reunión diplomática.`, 'warning');
             }
           } else if (nd.type === 'NEG_TREATY') {
-            if (nd.sub === 'propose') NEG.receiveTreaty(nd);
+            if (nd.sub === 'writing') {
+              MP_UI._addChatSystem(nd.fromId, nd.fromFlag, nd.fromName, '📜 está redactando un tratado diplomático…');
+            }
+            else if (nd.sub === 'propose') NEG.receiveTreaty(nd);
             else if (nd.sub === 'signed')   NEG.showSigningAnimation(() => { if (typeof UI !== 'undefined') UI.refresh(); });
             else if (nd.sub === 'rejected') { if (typeof UI !== 'undefined') UI.showToast('❌ Tu propuesta de tratado fue rechazada.', 'danger'); NEG.closeTreaty(); }
             else if (nd.sub === 'sign')     { if (typeof UI !== 'undefined') UI.showToast('✍️ El otro jugador también firmó. Esperando confirmación del host.', 'info'); }
@@ -614,6 +617,12 @@ const MP = {
             else if (nd.sub === 'offer')    NEG.receiveTradeOffer(nd);
             else if (nd.sub === 'done')     NEG.tradeCompleted(nd);
             else if (nd.sub === 'rejected') { NEG.closeTrade(); if (typeof UI !== 'undefined') UI.showToast('❌ El otro jugador rechazó el comercio.', 'warning'); }
+            else if (nd.sub === 'request_more') {
+              // Other player wants more — re-enable our propose button
+              const pb = document.getElementById('trade-btn-propose');
+              if (pb) { pb.textContent = '✏️ Actualizar oferta'; pb.disabled = false; }
+              if (typeof UI !== 'undefined') UI.showToast(`🔄 ${nd.fromFlag || ''} ${nd.fromName || ''} pide que mejores tu oferta.`, 'warning');
+            }
             else if (nd.sub === 'request') {
               MP_UI.showDipRequest({
                 icon: '🤝', reqId: 'trade_req_' + nd.fromId,
@@ -642,15 +651,18 @@ const MP = {
             else if (nd.sub === 'accepted') { if (typeof UI !== 'undefined') UI.showToast('✅ ¡El préstamo fue aceptado!', 'success'); NEG.closeLoan(); }
             else if (nd.sub === 'rejected') { if (typeof UI !== 'undefined') UI.showToast('❌ El préstamo fue rechazado.', 'danger'); NEG.closeLoan(); }
             else if (nd.sub === 'request') {
+              const roleDesc = nd.role === 'lender'
+                ? `${nd.fromFlag} ${nd.fromName} quiere <strong>prestarte</strong> recursos.`
+                : `${nd.fromFlag} ${nd.fromName} quiere <strong>pedirte un préstamo</strong>.`;
               MP_UI.showDipRequest({
                 icon: '💰', reqId: 'loan_req_' + nd.fromId,
                 fromFlag: nd.fromFlag, fromName: nd.fromName,
-                title: 'Solicitud de Negociación de Préstamo',
-                desc: `${nd.fromFlag} ${nd.fromName} quiere negociar un préstamo contigo.`,
+                title: nd.role === 'lender' ? 'Oferta de Préstamo' : 'Solicitud de Préstamo',
+                desc: roleDesc,
                 onAccept: () => {
                   const _g = MP_GAME.view();
                   const _me = _g?.countries?.[MP.myCountryId];
-                  MP._toHost({ type: 'NEG_LOAN', sub: 'request_accept', fromId: MP.myCountryId, targetId: nd.fromId, fromFlag: _me?.flag, fromName: _me?.name });
+                  MP._toHost({ type: 'NEG_LOAN', sub: 'request_accept', fromId: MP.myCountryId, targetId: nd.fromId, role: nd.role, fromFlag: _me?.flag, fromName: _me?.name });
                   if (typeof UI !== 'undefined') UI.showToast('💰 Aceptaste la negociación de préstamo.', 'info');
                 },
                 onDecline: () => {
@@ -662,7 +674,7 @@ const MP = {
               });
             }
             else if (nd.sub === 'request_open') {
-              NEG.openLoan(nd.targetId);
+              NEG.openLoan(nd.targetId, nd.role);
             }
             else if (nd.sub === 'request_rejected') {
               if (typeof UI !== 'undefined') UI.showToast(`❌ ${nd.fromFlag || ''} ${nd.fromName || ''} rechazó la negociación de préstamo.`, 'warning');
@@ -1562,6 +1574,14 @@ const MP_UI = {
     MP.sendChat(to, text);
   },
 
+  // Add a system notification to the current chat (e.g. "está redactando un tratado")
+  _addChatSystem(fromId, fromFlag, fromName, text) {
+    const key = fromId;
+    if (!this.history[key]) this.history[key] = [];
+    this.history[key].push({ from: fromId, fromFlag, fromName, text, isSystem: true });
+    if (this.currentTo === key) this._renderMessages(key);
+  },
+
   _renderMessages(key) {
     const el = document.getElementById('mp-chat-messages');
     if (!el) return;
@@ -1570,6 +1590,11 @@ const MP_UI = {
     el.innerHTML = msgs.length === 0
       ? '<div style="color:#555;font-size:12px;text-align:center;padding:20px">Sin mensajes aún. ¡Inicia la diplomacia!</div>'
       : msgs.map(m => {
+          if (m.isSystem) {
+            return `<div class="mp-msg mp-msg-system">
+              <div class="mp-msg-text">✦ ${m.fromFlag || ''} ${m.fromName || ''} ${m.text}</div>
+            </div>`;
+          }
           const isMe = m.from === MP.myCountryId;
           const c = v && v.countries && v.countries[m.from];
           const name = c ? (c.flag + ' ' + c.name) : m.from;

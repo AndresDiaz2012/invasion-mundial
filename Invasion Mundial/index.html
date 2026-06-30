@@ -386,8 +386,13 @@
           </select>
         </div>
         <div class="treaty-deadline-penalty-row" id="treaty-penalty-row" style="display:none">
-          <label class="treaty-label-small">⚠️ Condición si no se cumple el plazo:</label>
-          <input type="text" id="treaty-penalty" placeholder="Ej: declaración de guerra, devolución de tropas…">
+          <label class="treaty-label-small">⚠️ Consecuencia si no se cumple:</label>
+          <select id="treaty-penalty">
+            <option value="none">📋 Sin consecuencias formales</option>
+            <option value="war">⚔️ Declaración de guerra entre las partes</option>
+            <option value="break_alliance">💔 Ruptura de alianza</option>
+            <option value="sanctions">💸 Sanciones económicas (−$30B / −25 relación)</option>
+          </select>
         </div>
       </div>
 

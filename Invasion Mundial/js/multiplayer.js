@@ -1495,6 +1495,7 @@ const MP_GAME = {
       playerCountryId: g.playerCountryId,
       playerTreasuries: g.playerTreasuries || {},
       playerIncomes: g.playerIncomes || {},
+      aiTreasuries: g.aiTreasuries || {},
       gameOver: g.gameOver || false,
       missiles: g.missiles || 0,
       timerSeconds: typeof getTimerSeconds === 'function' ? getTimerSeconds() : 720,

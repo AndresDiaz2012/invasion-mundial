@@ -593,15 +593,29 @@ const NEG = {
     }
 
     if (type === 'NEG_TRADE') {
-      if (sub === 'offer') {
+      if (sub === 'request') {
+        // Forward the trade request to the target player
+        const targetPid = game.playerCountries?.[targetId];
+        if (targetPid) sendTo(targetPid, { ...msg });
+
+      } else if (sub === 'request_accept') {
+        // fromId = accepter's country, targetId = requester's country
+        const requesterPid = game.playerCountries?.[targetId];
+        const accepterPid  = game.playerCountries?.[fromId];
+        const tradeId = 'trade_' + Date.now();
+        if (requesterPid) sendTo(requesterPid, { type: 'NEG_TRADE', sub: 'open', fromId, targetId, id: tradeId, initiator: true });
+        if (accepterPid)  sendTo(accepterPid,  { type: 'NEG_TRADE', sub: 'open', fromId: targetId, targetId: fromId, id: tradeId, initiator: false });
+
+      } else if (sub === 'request_reject') {
+        const requesterPid = game.playerCountries?.[targetId];
+        if (requesterPid) sendTo(requesterPid, { type: 'NEG_TRADE', sub: 'request_rejected', fromId, fromFlag: msg.fromFlag, fromName: msg.fromName });
+
+      } else if (sub === 'offer') {
         // Route offer to the other player
         const targetPid = game.playerCountries?.[targetId];
         if (!game._pendingTrades) game._pendingTrades = {};
         if (!game._pendingTrades[id]) {
           game._pendingTrades[id] = { id, players: { [fromId]: msg.offer }, fromId, targetId };
-          // Open trade window on target side
-          const openMsg = { type: 'NEG_TRADE', sub: 'open', id, fromId, targetId };
-          if (targetPid) sendTo(targetPid, openMsg);
         } else {
           game._pendingTrades[id].players[fromId] = msg.offer;
         }
@@ -626,14 +640,15 @@ const NEG = {
         }
 
       } else if (sub === 'reject') {
-        if (game._pendingTrades?.[id]) delete game._pendingTrades[id];
-        const otherCId = fromId === (game._pendingTrades?.[id]?.fromId) ? targetId : fromId;
+        const pt = game._pendingTrades?.[id];
+        if (pt) delete game._pendingTrades[id];
+        const otherCId = fromId === pt?.fromId ? pt?.targetId : pt?.fromId;
         const otherPid = game.playerCountries?.[otherCId] || game.playerCountries?.[targetId];
         if (otherPid) sendTo(otherPid, { type: 'NEG_TRADE', sub: 'rejected' });
 
       } else if (sub === 'open') {
-        // Target receives open signal — open trade window as non-initiator
-        NEG.openTrade(fromId, false);
+        // Target receives open signal — open trade window (host-side dispatch for host-is-target case)
+        NEG.openTrade(fromId, !!msg.initiator);
 
       } else if (sub === 'done') {
         NEG.tradeCompleted({});
@@ -645,7 +660,22 @@ const NEG = {
     }
 
     if (type === 'NEG_LOAN') {
-      if (sub === 'propose') {
+      if (sub === 'request') {
+        // Forward the loan request to the target player (no terms yet)
+        const targetPid = game.playerCountries?.[targetId];
+        if (targetPid) sendTo(targetPid, { ...msg });
+
+      } else if (sub === 'request_accept') {
+        // fromId = accepter's country, targetId = requester's country
+        // Tell the requester to open their loan editor targeting the accepter
+        const requesterPid = game.playerCountries?.[targetId];
+        if (requesterPid) sendTo(requesterPid, { type: 'NEG_LOAN', sub: 'request_open', targetId: fromId, fromFlag: msg.fromFlag, fromName: msg.fromName });
+
+      } else if (sub === 'request_reject') {
+        const requesterPid = game.playerCountries?.[targetId];
+        if (requesterPid) sendTo(requesterPid, { type: 'NEG_LOAN', sub: 'request_rejected', fromId, fromFlag: msg.fromFlag, fromName: msg.fromName });
+
+      } else if (sub === 'propose') {
         const targetPid = game.playerCountries?.[targetId];
         if (!game._pendingLoans) game._pendingLoans = {};
         game._pendingLoans[id] = msg;
@@ -661,8 +691,8 @@ const NEG = {
         if (proposerPid) sendTo(proposerPid, { type: 'NEG_LOAN', sub: 'accepted', id });
 
       } else if (sub === 'reject') {
-        if (game._pendingLoans?.[id]) delete game._pendingLoans[id];
         const pl = game._pendingLoans?.[id];
+        if (pl) delete game._pendingLoans[id];
         const proposerPid = pl ? game.playerCountries?.[pl.fromId] : game.playerCountries?.[targetId];
         if (proposerPid) sendTo(proposerPid, { type: 'NEG_LOAN', sub: 'rejected' });
 
@@ -766,6 +796,38 @@ const NEG = {
   },
 
   // ─────────────────────────────────────────────────────────
+  // REQUEST HELPERS (send request before opening windows)
+  // ─────────────────────────────────────────────────────────
+
+  requestTrade(to) {
+    const g = UI.game;
+    const me = g?.countries?.[g.playerCountryId];
+    if (!me) return;
+    if (typeof MP !== 'undefined' && MP.enabled) {
+      MP._toHost({
+        type: 'NEG_TRADE', sub: 'request',
+        fromId: g.playerCountryId, targetId: to,
+        fromFlag: me.flag, fromName: me.name,
+      });
+      if (typeof UI !== 'undefined') UI.showToast('🤝 Solicitud de comercio enviada. Esperando respuesta…', 'info');
+    }
+  },
+
+  requestLoan(to) {
+    const g = UI.game;
+    const me = g?.countries?.[g.playerCountryId];
+    if (!me) return;
+    if (typeof MP !== 'undefined' && MP.enabled) {
+      MP._toHost({
+        type: 'NEG_LOAN', sub: 'request',
+        fromId: g.playerCountryId, targetId: to,
+        fromFlag: me.flag, fromName: me.name,
+      });
+      if (typeof UI !== 'undefined') UI.showToast('💰 Solicitud de préstamo enviada. Esperando respuesta…', 'info');
+    }
+  },
+
+  // ─────────────────────────────────────────────────────────
   // CHAT TOOLBAR INIT
   // ─────────────────────────────────────────────────────────
 
@@ -778,20 +840,12 @@ const NEG = {
     document.getElementById('neg-btn-trade')?.addEventListener('click', () => {
       const to = document.getElementById('mp-chat-overlay')?.dataset.to;
       if (!to) { alert('Abre un chat diplomático primero.'); return; }
-      NEG.openTrade(to, true);
-      // Notify target to open their trade window
-      if (typeof MP !== 'undefined' && MP.enabled) {
-        MP._toHost({
-          type: 'NEG_TRADE', sub: 'open',
-          id: NEG._trade?.id || ('trade_' + Date.now()),
-          fromId: UI.game?.playerCountryId, targetId: to,
-        });
-      }
+      NEG.requestTrade(to);
     });
     document.getElementById('neg-btn-loan')?.addEventListener('click', () => {
       const to = document.getElementById('mp-chat-overlay')?.dataset.to;
       if (!to) { alert('Abre un chat diplomático primero.'); return; }
-      NEG.openLoan(to);
+      NEG.requestLoan(to);
     });
   },
 };

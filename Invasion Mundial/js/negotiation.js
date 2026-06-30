@@ -23,6 +23,15 @@ const NEG = {
   // TREATY
   // ─────────────────────────────────────────────────────────
 
+  // Actions that require a quantity
+  COMMIT_QTY_ACTIONS: ['money','troops','aerial','naval','missiles'],
+  COMMIT_LABELS: {
+    money: '💰 Ayuda monetaria', troops: '🪖 Tropas', aerial: '✈️ Bombarderos',
+    naval: '⚓ Flota Naval', missiles: '🚀 Misiles',
+    alliance: '🤝 Alianza formal', protection: '🛡️ Protección militar', nonaggression: '🕊️ No agresión',
+  },
+  RESOURCE_KEYS: { money: 'treasury', troops: 'armySize', aerial: 'aerial', naval: 'naval', missiles: 'missiles' },
+
   openTreaty(targetCountryId) {
     const g = UI.game;
     const me = g.countries[g.playerCountryId];
@@ -34,7 +43,6 @@ const NEG = {
     document.getElementById('treaty-viewer').classList.add('hidden');
     document.getElementById('treaty-signing').classList.add('hidden');
 
-    // Seals & parties
     document.getElementById('treaty-seal-a').textContent = me.flag   || '🔴';
     document.getElementById('treaty-seal-b').textContent = them.flag || '🔵';
     document.getElementById('treaty-parties').textContent =
@@ -44,19 +52,38 @@ const NEG = {
     document.getElementById('treaty-obtained').value = '';
     document.getElementById('treaty-obtained-desc').value = '';
     document.getElementById('commit-who-1').value = 'me';
-    document.getElementById('commit-text-1').value = '';
+    document.getElementById('commit-action-1').value = '';
+    document.getElementById('commit-qty-1').value = '';
+    document.getElementById('commit-qty-1').style.display = 'none';
     document.getElementById('commit-row-2').style.display = 'none';
-    document.getElementById('commit-text-2').value = '';
+    document.getElementById('commit-action-2').value = '';
+    document.getElementById('commit-qty-2').value = '';
+    document.getElementById('commit-qty-2').style.display = 'none';
     document.getElementById('treaty-deadline').value = '';
+    document.getElementById('treaty-deadline-unit').value = 'months';
     document.getElementById('treaty-penalty-row').style.display = 'none';
     document.getElementById('treaty-penalty').value = '';
+    const hint = document.getElementById('treaty-resource-hint');
+    if (hint) { hint.textContent = ''; hint.classList.add('hidden'); }
+    // Reset propose button in case it was disabled from a previous proposal
+    const proposeBtn = document.getElementById('treaty-propose');
+    proposeBtn.textContent = '📜 Proponer Tratado';
+    proposeBtn.disabled = false;
 
     document.getElementById('treaty-overlay').classList.remove('hidden');
     this._wireTreatyEditor(targetCountryId);
+
+    // Notify the target player that a treaty is being drafted
+    if (typeof MP !== 'undefined' && MP.enabled) {
+      MP._toHost({
+        type: 'NEG_TREATY', sub: 'writing',
+        fromId: g.playerCountryId, targetId: targetCountryId,
+        fromFlag: me.flag, fromName: me.name,
+      });
+    }
   },
 
   _wireTreatyEditor(targetCountryId) {
-    // Second commitment row toggle
     const addBtn = document.getElementById('treaty-add-commit-btn');
     if (addBtn) {
       addBtn.onclick = () => {
@@ -65,7 +92,20 @@ const NEG = {
       };
     }
 
-    // Penalty row toggle
+    // Show/hide quantity input and validate when action changes
+    [1, 2].forEach(n => {
+      const actionSel = document.getElementById('commit-action-' + n);
+      const qtyInput  = document.getElementById('commit-qty-' + n);
+      if (!actionSel) return;
+      actionSel.onchange = () => {
+        const needsQty = NEG.COMMIT_QTY_ACTIONS.includes(actionSel.value);
+        qtyInput.style.display = needsQty ? '' : 'none';
+        if (!needsQty) qtyInput.value = '';
+        NEG._updateCommitHint(targetCountryId);
+      };
+      qtyInput.oninput = () => NEG._updateCommitHint(targetCountryId);
+    });
+
     const deadlineInput = document.getElementById('treaty-deadline');
     if (deadlineInput) {
       deadlineInput.oninput = () => {
@@ -78,49 +118,92 @@ const NEG = {
     document.getElementById('treaty-propose').onclick = () => this._proposeTreaty(targetCountryId);
   },
 
+  _updateCommitHint(targetCountryId) {
+    const g  = UI.game;
+    const me = g.countries[g.playerCountryId];
+    const them = g.countries[targetCountryId];
+    const hint = document.getElementById('treaty-resource-hint');
+    if (!hint) return;
+    const errors = [];
+    [1, 2].forEach(n => {
+      const action = document.getElementById('commit-action-' + n)?.value;
+      const qty    = +document.getElementById('commit-qty-' + n)?.value || 0;
+      const who    = document.getElementById('commit-who-' + n)?.value;
+      if (!action || !NEG.COMMIT_QTY_ACTIONS.includes(action) || qty <= 0) return;
+      const rk = NEG.RESOURCE_KEYS[action];
+      if (!rk) return;
+      const isMe   = (who === 'me' || who === 'both');
+      const isThem = (who === 'them' || who === 'both');
+      if (isMe) {
+        const avail = action === 'money' ? Math.round(g.treasury) : (me[rk] || 0);
+        if (qty > avail) errors.push(`⚠️ Tu país no tiene suficientes ${NEG.COMMIT_LABELS[action]} (disponible: ${avail.toLocaleString()})`);
+      }
+      if (isThem) {
+        const avail = action === 'money' ? Math.round(g.treasury) : (them[rk] || 0);
+        if (qty > avail) errors.push(`⚠️ ${them.name} no tiene suficientes ${NEG.COMMIT_LABELS[action]} (disponible: ${avail.toLocaleString()})`);
+      }
+    });
+    if (errors.length > 0) {
+      hint.textContent = errors[0];
+      hint.classList.remove('hidden');
+      hint.style.color = '#e74c3c';
+    } else {
+      hint.textContent = '';
+      hint.classList.add('hidden');
+    }
+  },
+
   _proposeTreaty(targetCountryId) {
     const obtained    = document.getElementById('treaty-obtained').value;
     const obtainedDesc = document.getElementById('treaty-obtained-desc').value.trim();
     if (!obtained) { alert('Debes seleccionar qué se obtiene con el tratado.'); return; }
 
-    const commitments = [];
-    const w1 = document.getElementById('commit-who-1').value;
-    const t1 = document.getElementById('commit-text-1').value.trim();
-    if (t1) commitments.push({ who: w1, text: t1 });
-
-    const row2vis = document.getElementById('commit-row-2').style.display !== 'none';
-    if (row2vis) {
-      const w2 = document.getElementById('commit-who-2').value;
-      const t2 = document.getElementById('commit-text-2').value.trim();
-      if (t2) commitments.push({ who: w2, text: t2 });
-    }
-
-    const deadline = parseInt(document.getElementById('treaty-deadline').value) || null;
-    const penalty  = deadline ? (document.getElementById('treaty-penalty').value.trim() || null) : null;
-
     const g = UI.game;
     const me = g.countries[g.playerCountryId];
     const them = g.countries[targetCountryId];
+
+    // Collect and validate commitments
+    const commitments = [];
+    const errors = [];
+    [1, 2].forEach(n => {
+      const row    = document.getElementById('commit-row-' + n);
+      if (n === 2 && row?.style.display === 'none') return;
+      const action = document.getElementById('commit-action-' + n)?.value;
+      const who    = document.getElementById('commit-who-' + n)?.value;
+      const qty    = +document.getElementById('commit-qty-' + n)?.value || 0;
+      if (!action) return;
+      const needsQty = NEG.COMMIT_QTY_ACTIONS.includes(action);
+      if (needsQty && qty <= 0) { errors.push(`Compromiso ${n}: indica la cantidad.`); return; }
+      // Validate against resources
+      if (needsQty) {
+        const rk = NEG.RESOURCE_KEYS[action];
+        if (who === 'me' || who === 'both') {
+          const avail = action === 'money' ? Math.round(g.treasury) : (me[rk] || 0);
+          if (qty > avail) { errors.push(`No tienes suficientes ${NEG.COMMIT_LABELS[action]} (tienes: ${avail.toLocaleString()}).`); return; }
+        }
+      }
+      commitments.push({ who, action, qty: needsQty ? qty : null });
+    });
+    if (errors.length > 0) { alert(errors[0]); return; }
+
+    const deadlineNum = parseInt(document.getElementById('treaty-deadline').value) || null;
+    const deadlineUnit = document.getElementById('treaty-deadline-unit').value || 'months';
+    const deadline = deadlineNum ? { value: deadlineNum, unit: deadlineUnit } : null;
+    const penalty  = deadline ? (document.getElementById('treaty-penalty').value.trim() || null) : null;
 
     const terms = { obtained, obtainedDesc, commitments, deadline, penalty };
     const id = 'treaty_' + Date.now();
     this._treaty = { id, targetId: targetCountryId, terms, mode: 'awaiting', mySign: false, theirSign: false };
 
-    // Dispatch via MP
     if (typeof MP !== 'undefined' && MP.enabled) {
       MP._toHost({
-        type: 'NEG_TREATY',
-        sub: 'propose',
-        id,
-        targetId: targetCountryId,
-        fromId: g.playerCountryId,
+        type: 'NEG_TREATY', sub: 'propose', id,
+        targetId: targetCountryId, fromId: g.playerCountryId,
         fromFlag: me.flag, fromName: me.name,
-        toFlag: them.flag, toName: them.name,
-        terms,
+        toFlag: them.flag, toName: them.name, terms,
       });
     }
 
-    // Show awaiting state
     document.getElementById('treaty-propose').textContent = '⏳ Esperando respuesta…';
     document.getElementById('treaty-propose').disabled = true;
     if (typeof UI !== 'undefined') UI.showToast('📜 Tratado enviado. Esperando firma del otro país.', 'info');
@@ -157,13 +240,25 @@ const NEG = {
   },
 
   _renderTreatyView(terms, fromFlag, fromName) {
-    const whoLabels = { me: fromFlag + ' ' + fromName, them: '(tú)', both: 'Ambos países' };
-    const commitHTML = (terms.commitments || []).map(c =>
-      `<div class="treaty-view-field">
-        <div class="treaty-view-label">Compromiso de ${c.who === 'me' ? fromName : c.who === 'both' ? 'ambos' : 'tu país'}</div>
-        <div class="treaty-view-val">${c.text}</div>
-      </div>`
-    ).join('');
+    const commitHTML = (terms.commitments || []).map(c => {
+      const whoLabel = c.who === 'me' ? `${fromFlag} ${fromName}` : c.who === 'both' ? 'Ambos países' : 'Tu país';
+      const actionLabel = NEG.COMMIT_LABELS[c.action] || c.action || c.text || '';
+      const qtyStr = (c.qty && c.qty > 0) ? ` — ${c.qty.toLocaleString()}` : '';
+      return `<div class="treaty-view-field">
+        <div class="treaty-view-label">Compromiso: ${whoLabel}</div>
+        <div class="treaty-view-val">${actionLabel}${qtyStr}</div>
+      </div>`;
+    }).join('');
+
+    const deadlineHTML = (() => {
+      if (!terms.deadline) return '';
+      const dl = typeof terms.deadline === 'object' ? terms.deadline : { value: terms.deadline, unit: 'months' };
+      const unitLabel = dl.unit === 'years' ? 'años' : 'meses';
+      return `<div class="treaty-view-field">
+        <div class="treaty-view-label">⏳ Plazo</div>
+        <div class="treaty-view-val">${dl.value} ${unitLabel}${terms.penalty ? ` · ⚠️ ${terms.penalty}` : ''}</div>
+      </div>`;
+    })();
 
     document.getElementById('treaty-view-content').innerHTML = `
       <div class="treaty-view-field">
@@ -171,11 +266,7 @@ const NEG = {
         <div class="treaty-view-val"><strong>${NEG.OBTAINED_LABELS[terms.obtained] || terms.obtained}</strong>
           ${terms.obtainedDesc ? `<br><em>${terms.obtainedDesc}</em>` : ''}</div>
       </div>
-      ${commitHTML}
-      ${terms.deadline ? `<div class="treaty-view-field">
-        <div class="treaty-view-label">Plazo</div>
-        <div class="treaty-view-val">${terms.deadline} turnos${terms.penalty ? ` · Penalización: ${terms.penalty}` : ''}</div>
-      </div>` : ''}`;
+      ${commitHTML}${deadlineHTML}`;
   },
 
   _signTreaty(id, targetId) {
@@ -246,13 +337,16 @@ const NEG = {
     document.getElementById('trade-title').textContent       =
       `🤝 Mesa de Comercio · ${myLabel} ↔ ${theirLabel}`;
 
-    // Reset form
+    // Reset form and button state (fixes "stuck in sending" bug between sessions)
     ['money','troops','aerial','naval','missiles'].forEach(k =>
       (document.getElementById('to-' + k).value = '0'));
     document.getElementById('trade-my-status').textContent = '';
     document.getElementById('trade-their-offer').innerHTML =
       '<div class="trade-waiting">Esperando oferta…</div>';
     document.getElementById('trade-btn-accept').disabled = true;
+    const propBtn = document.getElementById('trade-btn-propose');
+    propBtn.disabled = false;
+    propBtn.textContent = '📤 Proponer';
 
     document.getElementById('trade-overlay').classList.remove('hidden');
     this._wireTradeButtons(targetCountryId, initiator);
@@ -273,7 +367,12 @@ const NEG = {
       this._submitTradeOffer(targetCountryId);
     };
     document.getElementById('trade-btn-more').onclick = () => {
-      if (typeof UI !== 'undefined') UI.showToast('💬 Solicita más en el chat diplomático.', 'info');
+      const g = UI.game;
+      const me = g?.countries?.[g.playerCountryId];
+      if (typeof MP !== 'undefined' && MP.enabled) {
+        MP._toHost({ type: 'NEG_TRADE', sub: 'request_more', fromId: g.playerCountryId, targetId: targetCountryId, fromFlag: me?.flag, fromName: me?.name });
+      }
+      if (typeof UI !== 'undefined') UI.showToast('🔄 Pediste más. El otro jugador puede actualizar su oferta.', 'info');
     };
     document.getElementById('trade-btn-accept').onclick = () => {
       this._acceptTrade(targetCountryId);
@@ -333,9 +432,11 @@ const NEG = {
         offer,
       });
     }
-    document.getElementById('trade-btn-propose').disabled = true;
-    document.getElementById('trade-btn-propose').textContent = '⏳ Enviado…';
-    if (typeof UI !== 'undefined') UI.showToast('📤 Oferta enviada. Esperando la oferta del otro jugador.', 'info');
+    const pb = document.getElementById('trade-btn-propose');
+    pb.textContent = '⏳ Enviado…';
+    pb.disabled = true;
+    setTimeout(() => { pb.textContent = '✏️ Actualizar oferta'; pb.disabled = false; }, 1500);
+    if (typeof UI !== 'undefined') UI.showToast('📤 Oferta enviada. Puedes actualizarla si es necesario.', 'info');
   },
 
   receiveTradeOffer(data) {
@@ -403,70 +504,117 @@ const NEG = {
   // LOAN
   // ─────────────────────────────────────────────────────────
 
-  openLoan(targetCountryId) {
+  LOAN_ITEM_LABELS: { money: '💰 Dinero ($B)', troops: '🪖 Tropas', aerial: '✈️ Bombarderos', naval: '⚓ Flota Naval', missiles: '🚀 Misiles' },
+  LOAN_RESOURCE_KEYS: { money: 'treasury', troops: 'armySize', aerial: 'aerial', naval: 'naval', missiles: 'missiles' },
+
+  openLoan(targetCountryId, role) {
     const g = UI.game;
     const me = g.countries[g.playerCountryId];
     const them = g.countries[targetCountryId];
     if (!me || !them) return;
 
-    this._loan = { targetId: targetCountryId, mode: 'editor' };
+    const loanRole = role || 'lender';
+    this._loan = { targetId: targetCountryId, mode: 'editor', role: loanRole };
 
     document.getElementById('loan-title').textContent = `💰 Préstamo · ${me.flag} ${me.name} ↔ ${them.flag} ${them.name}`;
     document.getElementById('loan-editor').classList.remove('hidden');
     document.getElementById('loan-viewer').classList.add('hidden');
 
-    // Reset
-    document.getElementById('loan-role').value = 'lender';
+    // Show role badge (not a selector — role was decided before this window opened)
+    const badge = document.getElementById('loan-role-badge');
+    if (badge) {
+      badge.textContent = loanRole === 'lender'
+        ? `💰 Ofrezco un préstamo a ${them.flag} ${them.name}`
+        : `🙏 Solicito un préstamo a ${them.flag} ${them.name}`;
+    }
+
+    // Reset form
+    const itemSel = document.getElementById('loan-item');
+    if (itemSel) itemSel.value = 'money';
     document.getElementById('loan-amount').value = '100';
-    document.getElementById('loan-turns').value = '10';
+    document.getElementById('loan-turns').value = '6';
+    const unitSel = document.getElementById('loan-turns-unit');
+    if (unitSel) unitSel.value = 'months';
     document.getElementById('loan-penalty-type').value = 'war';
-    document.getElementById('loan-penalty-amount').value = '0';
     document.getElementById('loan-penalty-custom').style.display = 'none';
+    const hint = document.getElementById('loan-resource-hint');
+    if (hint) hint.textContent = '';
+    // Reset propose button
+    const propBtn = document.getElementById('loan-propose');
+    propBtn.textContent = '💰 Proponer';
+    propBtn.disabled = false;
 
     document.getElementById('loan-overlay').classList.remove('hidden');
-    this._wireLoanEditor(targetCountryId);
+    this._wireLoanEditor(targetCountryId, loanRole);
   },
 
-  _wireLoanEditor(targetCountryId) {
-    document.getElementById('loan-close').onclick   = () => this.closeLoan();
-    document.getElementById('loan-cancel').onclick  = () => this.closeLoan();
+  _wireLoanEditor(targetCountryId, role) {
+    document.getElementById('loan-close').onclick  = () => this.closeLoan();
+    document.getElementById('loan-cancel').onclick = () => this.closeLoan();
     document.getElementById('loan-penalty-type').onchange = (e) => {
-      const isCustom = e.target.value === 'custom';
-      document.getElementById('loan-penalty-amount').style.display = isCustom ? 'none' : '';
-      document.getElementById('loan-penalty-custom').style.display = isCustom ? '' : 'none';
+      document.getElementById('loan-penalty-custom').style.display = e.target.value === 'custom' ? '' : 'none';
     };
-    document.getElementById('loan-propose').onclick = () => {
-      this._proposeLoan(targetCountryId);
+
+    // Live resource validation
+    const validateLoan = () => {
+      const item   = document.getElementById('loan-item')?.value || 'money';
+      const amount = +document.getElementById('loan-amount')?.value || 0;
+      const hint   = document.getElementById('loan-resource-hint');
+      if (!hint) return;
+      const g  = UI.game;
+      const me = g.countries[g.playerCountryId];
+      const rk = NEG.LOAN_RESOURCE_KEYS[item];
+      const avail = item === 'money' ? Math.round(g.treasury) : (me[rk] || 0);
+      // Only validate availability if we're the one giving (lender)
+      if (role === 'lender' && amount > avail) {
+        hint.textContent = `⚠️ No tienes suficientes ${NEG.LOAN_ITEM_LABELS[item]} (disponible: ${avail.toLocaleString()})`;
+        hint.style.color = '#e74c3c';
+      } else {
+        hint.textContent = avail > 0 ? `✅ Disponible: ${avail.toLocaleString()}` : '';
+        hint.style.color = '#27ae60';
+      }
     };
+    document.getElementById('loan-item')?.addEventListener('change', validateLoan);
+    document.getElementById('loan-amount')?.addEventListener('input', validateLoan);
+    validateLoan();
+
+    document.getElementById('loan-propose').onclick = () => this._proposeLoan(targetCountryId, role);
   },
 
-  _proposeLoan(targetCountryId) {
-    const role         = document.getElementById('loan-role').value;
+  _proposeLoan(targetCountryId, role) {
+    const item         = document.getElementById('loan-item')?.value || 'money';
     const amount       = +document.getElementById('loan-amount').value;
-    const turns        = +document.getElementById('loan-turns').value;
+    const turnsNum     = +document.getElementById('loan-turns').value;
+    const turnsUnit    = document.getElementById('loan-turns-unit')?.value || 'months';
     const penaltyType  = document.getElementById('loan-penalty-type').value;
-    const penaltyAmt   = +document.getElementById('loan-penalty-amount').value;
     const penaltyCustom= document.getElementById('loan-penalty-custom').value.trim();
 
-    if (!amount || amount <= 0) { alert('Ingresa un monto válido.'); return; }
-    if (!turns  || turns <= 0)  { alert('Ingresa un plazo válido.'); return; }
+    if (!amount || amount <= 0) { alert('Ingresa una cantidad válida.'); return; }
+    if (!turnsNum || turnsNum <= 0) { alert('Ingresa un plazo válido.'); return; }
 
     const g = UI.game;
     const me = g.countries[g.playerCountryId];
     const them = g.countries[targetCountryId];
+
+    // Validate if lender has enough
+    if (role === 'lender') {
+      const rk = NEG.LOAN_RESOURCE_KEYS[item];
+      const avail = item === 'money' ? Math.round(g.treasury) : (me[rk] || 0);
+      if (amount > avail) { alert(`No tienes suficientes ${NEG.LOAN_ITEM_LABELS[item]} (disponible: ${avail.toLocaleString()}).`); return; }
+    }
+
     const lenderId   = role === 'lender' ? g.playerCountryId : targetCountryId;
     const borrowerId = role === 'lender' ? targetCountryId   : g.playerCountryId;
 
-    const terms = { amount, turns, penaltyType, penaltyAmount: penaltyAmt, penaltyCustom, lenderId, borrowerId };
+    const terms = { item, amount, turns: turnsNum, turnsUnit, penaltyType, penaltyCustom, lenderId, borrowerId };
     const id = 'loan_' + Date.now();
-    this._loan = { id, targetId: targetCountryId, terms, mode: 'awaiting' };
+    this._loan = { id, targetId: targetCountryId, terms, mode: 'awaiting', role };
 
     if (typeof MP !== 'undefined' && MP.enabled) {
       MP._toHost({
-        type: 'NEG_LOAN', sub: 'propose',
-        id, fromId: g.playerCountryId, targetId: targetCountryId,
-        fromFlag: me.flag, fromName: me.name, toFlag: them.flag, toName: them.name,
-        terms,
+        type: 'NEG_LOAN', sub: 'propose', id,
+        fromId: g.playerCountryId, targetId: targetCountryId,
+        fromFlag: me.flag, fromName: me.name, toFlag: them.flag, toName: them.name, role, terms,
       });
     }
     document.getElementById('loan-propose').textContent = '⏳ Esperando respuesta…';
@@ -475,28 +623,30 @@ const NEG = {
   },
 
   receiveLoan(data) {
-    const { id, fromId, fromFlag, fromName, terms } = data;
-    this._loan = { id, targetId: fromId, terms, mode: 'receiver' };
+    const { id, fromId, fromFlag, fromName, role, terms } = data;
+    this._loan = { id, targetId: fromId, terms, mode: 'receiver', role };
 
     const g = UI.game;
     const me = g.countries[g.playerCountryId];
     const lenderName   = terms.lenderId === fromId ? `${fromFlag} ${fromName}` : `${me.flag} ${me.name}`;
     const borrowerName = terms.borrowerId === fromId ? `${fromFlag} ${fromName}` : `${me.flag} ${me.name}`;
     const penLabels = { war:'Declaración de guerra', troops:'Transferencia de tropas',
-      aerial:'Transferencia de bombarderos', naval:'Transferencia de flota', custom: terms.penaltyCustom };
+      aerial:'Transferencia de bombarderos', naval:'Transferencia de flota', custom: terms.penaltyCustom || '—' };
+    const itemLabel = NEG.LOAN_ITEM_LABELS?.[terms.item] || '💰 Dinero ($B)';
+    const unitLabel = terms.turnsUnit === 'years' ? 'años' : 'meses';
+    const turnsNum  = terms.turns || terms.turnsNum || 0;
 
     document.getElementById('loan-view-content').innerHTML = `
       <div class="loan-view-row"><div class="loan-view-label">Prestamista</div>
         <div class="loan-view-val">${lenderName}</div></div>
       <div class="loan-view-row"><div class="loan-view-label">Prestatario</div>
         <div class="loan-view-val">${borrowerName}</div></div>
-      <div class="loan-view-row"><div class="loan-view-label">Monto</div>
-        <div class="loan-view-val">💰 $${terms.amount}B</div></div>
-      <div class="loan-view-row"><div class="loan-view-label">Plazo</div>
-        <div class="loan-view-val">⏳ ${terms.turns} turnos</div></div>
-      <div class="loan-view-row"><div class="loan-view-label">Condición si no se paga</div>
-        <div class="loan-view-val">⚠️ ${penLabels[terms.penaltyType] || terms.penaltyType}
-          ${terms.penaltyAmount > 0 ? ` (${terms.penaltyAmount.toLocaleString()})` : ''}</div></div>`;
+      <div class="loan-view-row"><div class="loan-view-label">Recurso</div>
+        <div class="loan-view-val">${itemLabel} — ${Number(terms.amount).toLocaleString()}</div></div>
+      <div class="loan-view-row"><div class="loan-view-label">⏳ Plazo</div>
+        <div class="loan-view-val">${turnsNum} ${unitLabel}</div></div>
+      <div class="loan-view-row"><div class="loan-view-label">⚠️ Si no se paga</div>
+        <div class="loan-view-val">${penLabels[terms.penaltyType] || terms.penaltyType}</div></div>`;
 
     document.getElementById('loan-title').textContent = `💰 Propuesta de Préstamo`;
     document.getElementById('loan-editor').classList.add('hidden');
@@ -534,20 +684,18 @@ const NEG = {
     const { type, sub, id, fromId, targetId } = msg;
 
     if (type === 'NEG_TREATY') {
-      if (sub === 'propose') {
-        // Route to target player
+      if (sub === 'writing') {
+        // Notify target that the other player is drafting a treaty
         const targetPid = game.playerCountries?.[targetId];
-        if (targetPid) {
-          if (targetPid === pid) {
-            // Target is host — show directly
-            NEG.receiveTreaty(msg);
-          } else {
-            sendTo(targetPid, msg);
-          }
-        }
-        // Store pending treaty
+        if (targetPid) sendTo(targetPid, msg);
+
+      } else if (sub === 'propose') {
+        // Route to target player — always re-route even if a previous treaty existed
+        const targetPid = game.playerCountries?.[targetId];
+        if (targetPid) sendTo(targetPid, msg);
+        // Store pending treaty — proposer is considered to have signed by proposing
         if (!game._pendingTreaties) game._pendingTreaties = {};
-        game._pendingTreaties[id] = { ...msg, signatures: {} };
+        game._pendingTreaties[id] = { ...msg, signatures: { [msg.fromId]: true } };
 
       } else if (sub === 'sign') {
         const pt = game._pendingTreaties?.[id];
@@ -610,6 +758,11 @@ const NEG = {
         const requesterPid = game.playerCountries?.[targetId];
         if (requesterPid) sendTo(requesterPid, { type: 'NEG_TRADE', sub: 'request_rejected', fromId, fromFlag: msg.fromFlag, fromName: msg.fromName });
 
+      } else if (sub === 'request_more') {
+        // Forward "ask for more" to the other player so they can re-propose
+        const targetPid = game.playerCountries?.[targetId];
+        if (targetPid) sendTo(targetPid, { type: 'NEG_TRADE', sub: 'request_more', fromFlag: msg.fromFlag, fromName: msg.fromName });
+
       } else if (sub === 'offer') {
         // Route offer to the other player
         const targetPid = game.playerCountries?.[targetId];
@@ -669,7 +822,7 @@ const NEG = {
         // fromId = accepter's country, targetId = requester's country
         // Tell the requester to open their loan editor targeting the accepter
         const requesterPid = game.playerCountries?.[targetId];
-        if (requesterPid) sendTo(requesterPid, { type: 'NEG_LOAN', sub: 'request_open', targetId: fromId, fromFlag: msg.fromFlag, fromName: msg.fromName });
+        if (requesterPid) sendTo(requesterPid, { type: 'NEG_LOAN', sub: 'request_open', targetId: fromId, role: msg.role, fromFlag: msg.fromFlag, fromName: msg.fromName });
 
       } else if (sub === 'request_reject') {
         const requesterPid = game.playerCountries?.[targetId];
@@ -813,18 +966,46 @@ const NEG = {
     }
   },
 
+  // Show role picker before sending loan request
   requestLoan(to) {
     const g = UI.game;
     const me = g?.countries?.[g.playerCountryId];
-    if (!me) return;
-    if (typeof MP !== 'undefined' && MP.enabled) {
-      MP._toHost({
-        type: 'NEG_LOAN', sub: 'request',
-        fromId: g.playerCountryId, targetId: to,
-        fromFlag: me.flag, fromName: me.name,
-      });
-      if (typeof UI !== 'undefined') UI.showToast('💰 Solicitud de préstamo enviada. Esperando respuesta…', 'info');
-    }
+    const them = g?.countries?.[to];
+    if (!me || !them) return;
+
+    // Remove any previous picker
+    const oldPicker = document.getElementById('loan-role-picker');
+    if (oldPicker) oldPicker.remove();
+
+    const picker = document.createElement('div');
+    picker.id = 'loan-role-picker';
+    picker.className = 'p2p-request-card';
+    picker.innerHTML = `
+      <div class="p2p-req-title">💰 ¿Tipo de préstamo?</div>
+      <div class="p2p-req-desc">¿Qué quieres hacer con ${them.flag} ${them.name}?</div>
+      <div class="p2p-req-btns">
+        <button class="p2p-accept-btn" id="lrp-offer">💰 Ofrezco un préstamo</button>
+        <button class="p2p-decline-btn" id="lrp-request">🙏 Pido un préstamo</button>
+      </div>
+      <button class="p2p-decline-btn" style="margin-top:6px;width:100%;font-size:0.8em" id="lrp-cancel">✕ Cancelar</button>`;
+    document.body.appendChild(picker);
+
+    const send = (role) => {
+      picker.remove();
+      const roleLabel = role === 'lender' ? 'ofrece un préstamo' : 'solicita un préstamo';
+      if (typeof MP !== 'undefined' && MP.enabled) {
+        MP._toHost({
+          type: 'NEG_LOAN', sub: 'request',
+          fromId: g.playerCountryId, targetId: to,
+          fromFlag: me.flag, fromName: me.name, role,
+        });
+        if (typeof UI !== 'undefined') UI.showToast('💰 Solicitud de préstamo enviada. Esperando respuesta…', 'info');
+      }
+    };
+
+    picker.querySelector('#lrp-offer').onclick   = () => send('lender');
+    picker.querySelector('#lrp-request').onclick  = () => send('borrower');
+    picker.querySelector('#lrp-cancel').onclick   = () => picker.remove();
   },
 
   // ─────────────────────────────────────────────────────────

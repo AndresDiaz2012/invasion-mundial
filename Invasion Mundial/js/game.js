@@ -146,6 +146,11 @@ class GameState {
     // AI monthly actions (arms buying, spontaneous wars)
     this._aiMonthlyActions();
 
+        // Check NEG treaty deadlines (host only — runs every game month)
+        if (typeof NEG !== 'undefined' && NEG._checkTreatyDeadlines) {
+          NEG._checkTreatyDeadlines(this);
+        }
+    
     // Monthly press conference check
     this._monthsSinceConf = (this._monthsSinceConf || 999) + 1;
     if (this._monthsSinceConf >= 6 && pc.stability < 40 && typeof UI !== 'undefined') {

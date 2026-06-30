@@ -334,30 +334,56 @@
 
       <div class="treaty-section">
         <label class="treaty-label">📝 Compromisos</label>
-        <div class="treaty-commitment-row">
+        <div class="treaty-commitment-row" id="commit-row-1">
           <select class="commitment-who" id="commit-who-1">
-            <option value="me">Mi país</option>
-            <option value="them">País objetivo</option>
-            <option value="both">Ambos países</option>
+            <option value="me">Mi país se compromete a…</option>
+            <option value="them">País objetivo se compromete a…</option>
+            <option value="both">Ambos se comprometen a…</option>
           </select>
-          <input type="text" class="commitment-text" id="commit-text-1" placeholder="Se compromete a…">
+          <select class="commitment-action" id="commit-action-1">
+            <option value="">— Seleccionar acción —</option>
+            <option value="money">💰 Ayuda monetaria ($B)</option>
+            <option value="troops">🪖 Tropas</option>
+            <option value="aerial">✈️ Bombarderos</option>
+            <option value="naval">⚓ Flota Naval</option>
+            <option value="missiles">🚀 Misiles</option>
+            <option value="alliance">🤝 Alianza formal</option>
+            <option value="protection">🛡️ Protección militar</option>
+            <option value="nonaggression">🕊️ No agresión</option>
+          </select>
+          <input type="number" class="commitment-qty" id="commit-qty-1" min="1" placeholder="Cantidad" style="display:none">
         </div>
         <div class="treaty-commitment-row" id="commit-row-2" style="display:none">
           <select class="commitment-who" id="commit-who-2">
-            <option value="me">Mi país</option>
-            <option value="them">País objetivo</option>
-            <option value="both">Ambos países</option>
+            <option value="me">Mi país se compromete a…</option>
+            <option value="them">País objetivo se compromete a…</option>
+            <option value="both">Ambos se comprometen a…</option>
           </select>
-          <input type="text" class="commitment-text" id="commit-text-2" placeholder="Se compromete a…">
+          <select class="commitment-action" id="commit-action-2">
+            <option value="">— Seleccionar acción —</option>
+            <option value="money">💰 Ayuda monetaria ($B)</option>
+            <option value="troops">🪖 Tropas</option>
+            <option value="aerial">✈️ Bombarderos</option>
+            <option value="naval">⚓ Flota Naval</option>
+            <option value="missiles">🚀 Misiles</option>
+            <option value="alliance">🤝 Alianza formal</option>
+            <option value="protection">🛡️ Protección militar</option>
+            <option value="nonaggression">🕊️ No agresión</option>
+          </select>
+          <input type="number" class="commitment-qty" id="commit-qty-2" min="1" placeholder="Cantidad" style="display:none">
         </div>
         <button class="treaty-add-commit" id="treaty-add-commit-btn">+ Agregar compromiso</button>
+        <div class="treaty-resource-hint hidden" id="treaty-resource-hint"></div>
       </div>
 
       <div class="treaty-section">
         <label class="treaty-label">⏳ Plazo de cumplimiento <span class="optional">(opcional)</span></label>
         <div class="treaty-deadline-row">
-          <input type="number" id="treaty-deadline" min="1" max="100" placeholder="N° de turnos">
-          <span class="treaty-unit">turnos</span>
+          <input type="number" id="treaty-deadline" min="1" max="999" placeholder="Número">
+          <select id="treaty-deadline-unit">
+            <option value="months">meses (1 mes = 1 min)</option>
+            <option value="years">años (1 año = 12 min)</option>
+          </select>
         </div>
         <div class="treaty-deadline-penalty-row" id="treaty-penalty-row" style="display:none">
           <label class="treaty-label-small">⚠️ Condición si no se cumple el plazo:</label>
@@ -441,19 +467,32 @@
     </div>
     <div id="loan-body">
       <div id="loan-editor">
-        <div class="loan-section">
-          <label class="loan-label">Soy el <select id="loan-role">
-            <option value="lender">Prestamista (doy el préstamo)</option>
-            <option value="borrower">Prestatario (solicito el préstamo)</option>
-          </select></label>
+        <div class="loan-section loan-role-display" id="loan-role-display">
+          <div class="loan-role-badge" id="loan-role-badge">💰 Ofrezco un préstamo</div>
         </div>
         <div class="loan-section">
-          <label class="loan-label">💰 Monto del préstamo ($B)</label>
-          <input type="number" id="loan-amount" min="1" value="100">
+          <label class="loan-label">Recurso a prestar/pedir</label>
+          <div class="loan-item-row">
+            <select id="loan-item">
+              <option value="money">💰 Dinero ($B)</option>
+              <option value="troops">🪖 Tropas</option>
+              <option value="aerial">✈️ Bombarderos</option>
+              <option value="naval">⚓ Flota Naval</option>
+              <option value="missiles">🚀 Misiles</option>
+            </select>
+            <input type="number" id="loan-amount" min="1" value="100" placeholder="Cantidad">
+          </div>
+          <div class="loan-resource-hint" id="loan-resource-hint"></div>
         </div>
         <div class="loan-section">
-          <label class="loan-label">⏳ Plazo de devolución (turnos)</label>
-          <input type="number" id="loan-turns" min="1" value="10">
+          <label class="loan-label">⏳ Plazo de devolución</label>
+          <div class="loan-deadline-row">
+            <input type="number" id="loan-turns" min="1" value="6" placeholder="Número">
+            <select id="loan-turns-unit">
+              <option value="months">meses (1 mes = 1 min)</option>
+              <option value="years">años (1 año = 12 min)</option>
+            </select>
+          </div>
         </div>
         <div class="loan-section">
           <label class="loan-label">⚠️ Condición si no se paga a tiempo</label>
@@ -464,14 +503,11 @@
             <option value="naval">Transferencia de flota naval</option>
             <option value="custom">Condición personalizada</option>
           </select>
-          <div id="loan-penalty-detail-row">
-            <input type="number" id="loan-penalty-amount" min="0" value="0" placeholder="Cantidad (si aplica)">
-            <input type="text"   id="loan-penalty-custom" placeholder="Descripción personalizada" style="display:none">
-          </div>
+          <input type="text" id="loan-penalty-custom" placeholder="Descripción personalizada" style="display:none">
         </div>
         <div class="loan-actions">
           <button class="loan-btn loan-cancel" id="loan-cancel">Cancelar</button>
-          <button class="loan-btn loan-propose" id="loan-propose">💰 Proponer Préstamo</button>
+          <button class="loan-btn loan-propose" id="loan-propose">💰 Proponer</button>
         </div>
       </div>
 

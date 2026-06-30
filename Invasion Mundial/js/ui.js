@@ -1115,7 +1115,7 @@ const UI = {
     const ally    = g.countries[allyId];
     const pc      = g.countries[g.playerCountryId];
     const rel     = g.getRelation(g.playerCountryId, allyId);
-    const budget  = Math.round(g.aiTreasuries[allyId] || 0);
+    const budget  = Math.round((g.aiTreasuries?.[allyId]) || 0);
     const atWar   = pc.atWar.length > 0;
     const hasWP   = (pc.warPacts || []).includes(allyId);
 

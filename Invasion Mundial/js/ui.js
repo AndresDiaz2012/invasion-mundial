@@ -556,7 +556,7 @@ const UI = {
           <div class="action-desc">Envía un mensaje directo al jugador que controla ${target.name}. Los espías pueden interceptar la conversación.</div>
           <div class="action-cost">💰 Gratis</div>
         </div>`;
-      chatBtn.addEventListener('click', () => MP_UI.open(targetId));
+      chatBtn.addEventListener('click', () => MP_UI.requestMeeting(targetId));
       list.appendChild(chatBtn);
     }
 

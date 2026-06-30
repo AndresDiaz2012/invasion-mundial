@@ -406,6 +406,27 @@ const MP = {
       case 'CHAT':
         this._routeChat(pid, d.msg);
         break;
+      case 'NEG_MEETING': {
+        const _deliver = (toPid, msg) => {
+          if (toPid === this.myPeerId) MP._onFromHost({ type: 'NEG_MSG', data: msg });
+          else this._sendTo(toPid, { type: 'NEG_MSG', data: msg });
+        };
+        const _game = MP_GAME.game;
+        if (d.sub === 'request') {
+          const tgtPid = _game?.playerCountries?.[d.toId];
+          if (tgtPid) _deliver(tgtPid, { ...d });
+        } else if (d.sub === 'accept') {
+          // d.fromId = accepter, d.toId = original requester
+          const reqPid = _game?.playerCountries?.[d.toId];
+          const accPid = _game?.playerCountries?.[d.fromId];
+          if (reqPid) _deliver(reqPid, { type: 'NEG_MEETING', sub: 'open', withId: d.fromId });
+          if (accPid) _deliver(accPid, { type: 'NEG_MEETING', sub: 'open', withId: d.toId });
+        } else if (d.sub === 'decline') {
+          const reqPid = _game?.playerCountries?.[d.toId];
+          if (reqPid) _deliver(reqPid, { type: 'NEG_MEETING', sub: 'declined', fromFlag: d.fromFlag, fromName: d.fromName });
+        }
+        break;
+      }
       case 'NEG_TREATY':
       case 'NEG_TRADE':
       case 'NEG_LOAN':
@@ -559,20 +580,93 @@ const MP = {
       case 'NEG_MSG':
         if (typeof NEG !== 'undefined' && d.data) {
           const nd = d.data;
-          if (nd.type === 'NEG_TREATY') {
+          if (nd.type === 'NEG_MEETING') {
+            if (nd.sub === 'request') {
+              MP_UI.showDipRequest({
+                icon: '🌐', reqId: 'meeting_' + nd.fromId,
+                fromFlag: nd.fromFlag, fromName: nd.fromName,
+                title: 'Solicitud de Reunión Diplomática',
+                desc: `${nd.fromFlag} ${nd.fromName} solicita una reunión diplomática contigo.`,
+                onAccept: () => {
+                  const _g = MP_GAME.view();
+                  const _me = _g?.countries?.[MP.myCountryId];
+                  MP._toHost({ type: 'NEG_MEETING', sub: 'accept', toId: nd.fromId, fromId: MP.myCountryId, fromFlag: _me?.flag, fromName: _me?.name });
+                },
+                onDecline: () => {
+                  const _g = MP_GAME.view();
+                  const _me = _g?.countries?.[MP.myCountryId];
+                  MP._toHost({ type: 'NEG_MEETING', sub: 'decline', toId: nd.fromId, fromId: MP.myCountryId, fromFlag: _me?.flag, fromName: _me?.name });
+                },
+              });
+            } else if (nd.sub === 'open') {
+              MP_UI.open(nd.withId);
+              if (typeof UI !== 'undefined') UI.showToast('💬 ¡Reunión diplomática iniciada!', 'success');
+            } else if (nd.sub === 'declined') {
+              if (typeof UI !== 'undefined') UI.showToast(`❌ ${nd.fromFlag} ${nd.fromName} rechazó la reunión diplomática.`, 'warning');
+            }
+          } else if (nd.type === 'NEG_TREATY') {
             if (nd.sub === 'propose') NEG.receiveTreaty(nd);
             else if (nd.sub === 'signed')   NEG.showSigningAnimation(() => { if (typeof UI !== 'undefined') UI.refresh(); });
             else if (nd.sub === 'rejected') { if (typeof UI !== 'undefined') UI.showToast('❌ Tu propuesta de tratado fue rechazada.', 'danger'); NEG.closeTreaty(); }
             else if (nd.sub === 'sign')     { if (typeof UI !== 'undefined') UI.showToast('✍️ El otro jugador también firmó. Esperando confirmación del host.', 'info'); }
           } else if (nd.type === 'NEG_TRADE') {
-            if (nd.sub === 'open')     { NEG.openTrade(nd.fromId, false); }
+            if (nd.sub === 'open')          { NEG.openTrade(nd.fromId, !!nd.initiator); }
             else if (nd.sub === 'offer')    NEG.receiveTradeOffer(nd);
             else if (nd.sub === 'done')     NEG.tradeCompleted(nd);
             else if (nd.sub === 'rejected') { NEG.closeTrade(); if (typeof UI !== 'undefined') UI.showToast('❌ El otro jugador rechazó el comercio.', 'warning'); }
+            else if (nd.sub === 'request') {
+              MP_UI.showDipRequest({
+                icon: '🤝', reqId: 'trade_req_' + nd.fromId,
+                fromFlag: nd.fromFlag, fromName: nd.fromName,
+                title: 'Solicitud de Negociación Comercial',
+                desc: `${nd.fromFlag} ${nd.fromName} quiere negociar un acuerdo comercial contigo.`,
+                onAccept: () => {
+                  const _g = MP_GAME.view();
+                  const _me = _g?.countries?.[MP.myCountryId];
+                  MP._toHost({ type: 'NEG_TRADE', sub: 'request_accept', fromId: MP.myCountryId, targetId: nd.fromId, fromFlag: _me?.flag, fromName: _me?.name });
+                  if (typeof UI !== 'undefined') UI.showToast('🤝 Aceptaste la negociación comercial.', 'info');
+                },
+                onDecline: () => {
+                  const _g = MP_GAME.view();
+                  const _me = _g?.countries?.[MP.myCountryId];
+                  MP._toHost({ type: 'NEG_TRADE', sub: 'request_reject', fromId: MP.myCountryId, targetId: nd.fromId, fromFlag: _me?.flag, fromName: _me?.name });
+                  if (typeof UI !== 'undefined') UI.showToast('❌ Rechazaste la negociación comercial.', 'warning');
+                },
+              });
+            }
+            else if (nd.sub === 'request_rejected') {
+              if (typeof UI !== 'undefined') UI.showToast(`❌ ${nd.fromFlag || ''} ${nd.fromName || ''} rechazó la negociación comercial.`, 'warning');
+            }
           } else if (nd.type === 'NEG_LOAN') {
             if (nd.sub === 'propose') NEG.receiveLoan(nd);
             else if (nd.sub === 'accepted') { if (typeof UI !== 'undefined') UI.showToast('✅ ¡El préstamo fue aceptado!', 'success'); NEG.closeLoan(); }
             else if (nd.sub === 'rejected') { if (typeof UI !== 'undefined') UI.showToast('❌ El préstamo fue rechazado.', 'danger'); NEG.closeLoan(); }
+            else if (nd.sub === 'request') {
+              MP_UI.showDipRequest({
+                icon: '💰', reqId: 'loan_req_' + nd.fromId,
+                fromFlag: nd.fromFlag, fromName: nd.fromName,
+                title: 'Solicitud de Negociación de Préstamo',
+                desc: `${nd.fromFlag} ${nd.fromName} quiere negociar un préstamo contigo.`,
+                onAccept: () => {
+                  const _g = MP_GAME.view();
+                  const _me = _g?.countries?.[MP.myCountryId];
+                  MP._toHost({ type: 'NEG_LOAN', sub: 'request_accept', fromId: MP.myCountryId, targetId: nd.fromId, fromFlag: _me?.flag, fromName: _me?.name });
+                  if (typeof UI !== 'undefined') UI.showToast('💰 Aceptaste la negociación de préstamo.', 'info');
+                },
+                onDecline: () => {
+                  const _g = MP_GAME.view();
+                  const _me = _g?.countries?.[MP.myCountryId];
+                  MP._toHost({ type: 'NEG_LOAN', sub: 'request_reject', fromId: MP.myCountryId, targetId: nd.fromId, fromFlag: _me?.flag, fromName: _me?.name });
+                  if (typeof UI !== 'undefined') UI.showToast('❌ Rechazaste la negociación de préstamo.', 'warning');
+                },
+              });
+            }
+            else if (nd.sub === 'request_open') {
+              NEG.openLoan(nd.targetId);
+            }
+            else if (nd.sub === 'request_rejected') {
+              if (typeof UI !== 'undefined') UI.showToast(`❌ ${nd.fromFlag || ''} ${nd.fromName || ''} rechazó la negociación de préstamo.`, 'warning');
+            }
           }
         }
         break;
@@ -1527,6 +1621,53 @@ const MP_UI = {
   openIntercepts() {
     const p = document.getElementById('intercept-panel');
     if (p) { p.classList.toggle('hidden'); this._renderIntercepts(); }
+  },
+
+  // Send a meeting request to another player — chat only opens when they accept
+  requestMeeting(toCountryId) {
+    const g = MP_GAME.view();
+    const me = g?.countries?.[MP.myCountryId];
+    if (!me) return;
+    if (typeof UI !== 'undefined') UI.showToast('📡 Solicitando reunión diplomática…', 'info');
+    MP._toHost({
+      type: 'NEG_MEETING', sub: 'request',
+      toId: toCountryId,
+      fromId: MP.myCountryId,
+      fromFlag: me.flag, fromName: me.name,
+    });
+  },
+
+  // Generic diplomatic request card (meeting / trade / loan)
+  showDipRequest({ icon, reqId, fromFlag, fromName, title, desc, onAccept, onDecline }) {
+    const old = document.getElementById('dip-req-' + reqId);
+    if (old) old.remove();
+    const card = document.createElement('div');
+    card.id = 'dip-req-' + reqId;
+    card.className = 'p2p-request-card';
+    card.innerHTML = `
+      <div class="p2p-req-icon">${icon || '🌐'}</div>
+      <div class="p2p-req-title">${title}</div>
+      <div class="p2p-req-from">${fromFlag || ''} <strong>${fromName || 'Jugador'}</strong></div>
+      ${desc ? `<div class="p2p-req-desc">${desc}</div>` : ''}
+      <div class="p2p-req-btns">
+        <button class="p2p-accept-btn">✅ Aceptar</button>
+        <button class="p2p-decline-btn">❌ Rechazar</button>
+      </div>
+      <div class="p2p-req-countdown">Responde en <span class="p2p-secs">30</span>s o se rechaza automáticamente</div>`;
+    card.querySelector('.p2p-accept-btn').addEventListener('click', () => {
+      clearInterval(card._timer); card.remove(); onAccept();
+    });
+    card.querySelector('.p2p-decline-btn').addEventListener('click', () => {
+      clearInterval(card._timer); card.remove(); onDecline();
+    });
+    document.body.appendChild(card);
+    let secs = 30;
+    card._timer = setInterval(() => {
+      secs--;
+      const el = card.querySelector('.p2p-secs');
+      if (el) el.textContent = secs;
+      if (secs <= 0) { clearInterval(card._timer); card.remove(); onDecline(); }
+    }, 1000);
   },
 
   // Show a consent request card when another player targets this player's country

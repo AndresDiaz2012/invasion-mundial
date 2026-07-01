@@ -613,7 +613,7 @@ const MP = {
             else if (nd.sub === 'rejected') { if (typeof UI !== 'undefined') UI.showToast('❌ Tu propuesta de tratado fue rechazada.', 'danger'); NEG.closeTreaty(); }
             else if (nd.sub === 'sign')     { if (typeof UI !== 'undefined') UI.showToast('✍️ El otro jugador también firmó. Esperando confirmación del host.', 'info'); }
           } else if (nd.type === 'NEG_TRADE') {
-            if (nd.sub === 'open')          { NEG.openTrade(nd.fromId, !!nd.initiator); }
+            if (nd.sub === 'open')          { NEG.openTrade(nd.fromId, !!nd.initiator, nd.id); }
             else if (nd.sub === 'offer')    NEG.receiveTradeOffer(nd);
             else if (nd.sub === 'done')     NEG.tradeCompleted(nd);
             else if (nd.sub === 'rejected') { NEG.closeTrade(); if (typeof UI !== 'undefined') UI.showToast('❌ El otro jugador rechazó el comercio.', 'warning'); }

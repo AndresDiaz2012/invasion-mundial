@@ -190,8 +190,10 @@ const NEG = {
     const deadlineUnit = document.getElementById('treaty-deadline-unit').value || 'months';
     const deadline = deadlineNum ? { value: deadlineNum, unit: deadlineUnit } : null;
     const penalty  = deadline ? (document.getElementById('treaty-penalty').value || 'none') : null;
+    const sanctionsType   = (penalty === 'sanctions') ? (document.getElementById('sanctions-type')?.value || 'money') : null;
+    const sanctionsAmount = (penalty === 'sanctions') ? (parseInt(document.getElementById('sanctions-amount')?.value) || 30) : null;
 
-    const terms = { obtained, obtainedDesc, commitments, deadline, penalty };
+    const terms = { obtained, obtainedDesc, commitments, deadline, penalty, sanctionsType, sanctionsAmount };
     const id = 'treaty_' + Date.now();
     this._treaty = { id, targetId: targetCountryId, terms, mode: 'awaiting', mySign: false, theirSign: false };
 
@@ -475,15 +477,21 @@ const NEG = {
   _acceptTrade(targetCountryId) {
     const g = UI.game;
     if (typeof MP !== 'undefined' && MP.enabled) {
+      const me = g?.countries?.[g.playerCountryId];
       MP._toHost({
         type: 'NEG_TRADE', sub: 'accept',
         id: this._trade?.id,
         fromId: g.playerCountryId, targetId: targetCountryId,
         myOffer: this._trade?.myOffer,
+        fromFlag: me?.flag, fromName: me?.name,
       });
+      const btn = document.getElementById('trade-btn-accept');
+      if (btn) { btn.disabled = true; btn.textContent = '⏳ Esperando confirmación…'; }
+      if (typeof UI !== 'undefined') UI.showToast('⏳ Aceptaste. Esperando que el otro jugador confirme…', 'info');
+    } else {
+      this.closeTrade();
+      if (typeof UI !== 'undefined') UI.showToast('✅ ¡Comercio aceptado!', 'success');
     }
-    this.closeTrade();
-    if (typeof UI !== 'undefined') UI.showToast('✅ ¡Comercio aceptado! El intercambio se ejecutará pronto.', 'success');
   },
 
   tradeCompleted(data) {
@@ -787,18 +795,30 @@ const NEG = {
       } else if (sub === 'accept') {
         const pt = game._pendingTrades?.[id];
         if (!pt) return;
-        // Execute trade if both have offers
-        const myOff    = msg.myOffer || pt.players[fromId];
-        const theirOff = pt.players[targetId];
-        if (myOff && theirOff) {
-          NEG._executeTrade(fromId, targetId, myOff, theirOff, game);
+        // Record offer and acceptance from this party
+        if (msg.myOffer) pt.players[fromId] = msg.myOffer;
+        if (!pt.acceptances) pt.acceptances = {};
+        pt.acceptances[fromId] = true;
+
+        const pA = pt.fromId, pB = pt.targetId;
+        const bothAccepted = pt.acceptances[pA] && pt.acceptances[pB];
+        const bothHaveOffers = pt.players[pA] && pt.players[pB];
+
+        if (bothAccepted && bothHaveOffers) {
+          NEG._executeTrade(pA, pB, pt.players[pA], pt.players[pB], game);
           delete game._pendingTrades[id];
           bcastState();
           const doneMsg = { type: 'NEG_TRADE', sub: 'done' };
-          [fromId, targetId].forEach(cid => {
+          [pA, pB].forEach(cid => {
             const cp = game.playerCountries?.[cid];
             if (cp) sendTo(cp, doneMsg);
           });
+        } else {
+          // Notify the other party that this party accepted — they need to confirm too
+          const otherCId = fromId === pA ? pB : pA;
+          const otherPid = game.playerCountries?.[otherCId];
+          const fromC = game.countries[fromId];
+          if (otherPid) sendTo(otherPid, { type: 'NEG_TRADE', sub: 'partner_accepted', fromId, fromFlag: fromC?.flag, fromName: fromC?.name });
         }
 
       } else if (sub === 'reject') {
@@ -908,6 +928,8 @@ const NEG = {
         commitments: terms.commitments,
         deadlineMonth,
         penaltyType: terms.penalty || 'none',
+        sanctionsType: terms.sanctionsType || null,
+        sanctionsAmount: terms.sanctionsAmount || null,
         status: 'active',
       });
     }
@@ -1047,12 +1069,24 @@ const NEG = {
         game.addLog(`💔 Plazo vencido del tratado entre ${fromName} y ${toName}: alianza disuelta.`, 'warning');
       } else if (pt === 'sanctions') {
         game.changeRelation(c.fromId, c.targetId, -25);
-        const SANC = 30;
-        if (game.playerTreasuries) {
-          if (game.playerTreasuries[c.fromId]    != null) game.playerTreasuries[c.fromId]    = Math.max(0, game.playerTreasuries[c.fromId]    - SANC);
-          if (game.playerTreasuries[c.targetId]  != null) game.playerTreasuries[c.targetId]  = Math.max(0, game.playerTreasuries[c.targetId]  - SANC);
+        const sType = c.sanctionsType || 'money';
+        const sAmt  = c.sanctionsAmount || 30;
+        const RESOURCE_KEY = { troops: 'armySize', aerial: 'aerial', missiles: 'missiles' };
+        if (sType === 'money') {
+          if (game.playerTreasuries) {
+            if (game.playerTreasuries[c.fromId]   != null) game.playerTreasuries[c.fromId]   = Math.max(0, game.playerTreasuries[c.fromId]   - sAmt);
+            if (game.playerTreasuries[c.targetId] != null) game.playerTreasuries[c.targetId] = Math.max(0, game.playerTreasuries[c.targetId] - sAmt);
+          }
+          game.addLog(`💸 Sanciones: ${fromName} y ${toName} pierden $${sAmt}B cada uno.`, 'warning');
+        } else {
+          const rKey = RESOURCE_KEY[sType] || sType;
+          const typeLabels = { troops: 'tropas', aerial: 'bombarderos', missiles: 'misiles' };
+          const pIdC = game.countries[c.fromId];
+          const tIdC = game.countries[c.targetId];
+          if (pIdC) pIdC[rKey] = Math.max(0, (pIdC[rKey] || 0) - sAmt);
+          if (tIdC) tIdC[rKey] = Math.max(0, (tIdC[rKey] || 0) - sAmt);
+          game.addLog(`💸 Sanciones militares: ${fromName} y ${toName} pierden ${sAmt} ${typeLabels[sType] || sType} cada uno.`, 'warning');
         }
-        game.addLog(`💸 Plazo vencido del tratado entre ${fromName} y ${toName}: sanciones de $${SANC}B activadas.`, 'warning');
       } else {
         game.addLog(`📋 Tratado entre ${fromName} y ${toName} expiró sin consecuencias.`, 'info');
       }

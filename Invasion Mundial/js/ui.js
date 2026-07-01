@@ -85,8 +85,6 @@ const UI = {
   },
 
   showYearTransition(year, callback) {
-    if (typeof SFX !== 'undefined') SFX.year();
-
     const g = UI.game;
     const pc = g?.countries[g?.playerCountryId];
 

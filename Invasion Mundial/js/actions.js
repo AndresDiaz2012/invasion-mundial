@@ -178,9 +178,12 @@ const ACTIONS = {
         if (!pc.allies.includes(targetId)) return { success: false, msg: `No tienes una alianza activa con ${target.name}.` };
         pc.allies = pc.allies.filter(id => id !== targetId);
         target.allies = target.allies.filter(id => id !== state.playerCountryId);
-        state.changeRelation(state.playerCountryId, targetId, -20);
-        state.addLog(`Alianza con ${target.name} rota. Relaciones -20.`, 'warning');
-        return { success: true, msg: `Rompiste la alianza con ${target.name}. Las relaciones se enfriarán.` };
+        pc.warPacts = (pc.warPacts || []).filter(id => id !== targetId);
+        target.warPacts = (target.warPacts || []).filter(id => id !== state.playerCountryId);
+        const curRel = state.getRelation(state.playerCountryId, targetId);
+        state.changeRelation(state.playerCountryId, targetId, Math.min(-30, 25 - curRel));
+        state.addLog(`Alianza con ${target.name} rota. Relaciones gravemente dañadas.`, 'warning');
+        return { success: true, msg: `Rompiste la alianza con ${target.name}. Las relaciones se han deteriorado significativamente.` };
       }
     },
   ],

@@ -387,12 +387,23 @@
         </div>
         <div class="treaty-deadline-penalty-row" id="treaty-penalty-row" style="display:none">
           <label class="treaty-label-small">⚠️ Consecuencia si no se cumple:</label>
-          <select id="treaty-penalty">
+          <select id="treaty-penalty" onchange="document.getElementById('sanctions-detail-row').style.display=this.value==='sanctions'?'flex':'none'">
             <option value="none">📋 Sin consecuencias formales</option>
             <option value="war">⚔️ Declaración de guerra entre las partes</option>
             <option value="break_alliance">💔 Ruptura de alianza</option>
-            <option value="sanctions">💸 Sanciones económicas (−$30B / −25 relación)</option>
+            <option value="sanctions">💸 Sanciones (configura tipo y cantidad)</option>
           </select>
+        </div>
+        <div id="sanctions-detail-row" style="display:none;flex-wrap:wrap;gap:8px;align-items:center;margin-top:6px">
+          <label class="treaty-label-small">💸 Tipo de sanción:</label>
+          <select id="sanctions-type" style="flex:1;min-width:120px">
+            <option value="money">💰 Dinero ($B)</option>
+            <option value="troops">🪖 Tropas</option>
+            <option value="aerial">✈️ Bombarderos</option>
+            <option value="missiles">🚀 Misiles</option>
+          </select>
+          <label class="treaty-label-small">Cantidad:</label>
+          <input type="number" id="sanctions-amount" min="1" value="30" style="width:70px;padding:4px 6px;border-radius:4px;border:1px solid #555;background:#1a1a2e;color:#eee">
         </div>
       </div>
 

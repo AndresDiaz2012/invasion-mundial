@@ -326,7 +326,7 @@ const NEG = {
   // TRADE
   // ─────────────────────────────────────────────────────────
 
-  openTrade(targetCountryId, initiator = true) {
+  openTrade(targetCountryId, initiator = true, sessionId = null) {
     const g = UI.game;
     const me = g.countries[g.playerCountryId];
     const them = g.countries[targetCountryId];
@@ -337,7 +337,7 @@ const NEG = {
       initiator,
       myOffer: null,
       theirOffer: null,
-      id: 'trade_' + Date.now(),
+      id: sessionId || ('trade_' + Date.now()),
       round: 1,
     };
 
@@ -768,6 +768,9 @@ const NEG = {
         const requesterPid = game.playerCountries?.[targetId];
         const accepterPid  = game.playerCountries?.[fromId];
         const tradeId = 'trade_' + Date.now();
+        // Pre-create the record so fromId=requester, targetId=accepter is always canonical
+        if (!game._pendingTrades) game._pendingTrades = {};
+        game._pendingTrades[tradeId] = { id: tradeId, fromId: targetId, targetId: fromId, players: {}, acceptances: {} };
         if (requesterPid) sendTo(requesterPid, { type: 'NEG_TRADE', sub: 'open', fromId, targetId, id: tradeId, initiator: true });
         if (accepterPid)  sendTo(accepterPid,  { type: 'NEG_TRADE', sub: 'open', fromId: targetId, targetId: fromId, id: tradeId, initiator: false });
 
@@ -795,17 +798,19 @@ const NEG = {
       } else if (sub === 'accept') {
         const pt = game._pendingTrades?.[id];
         if (!pt) return;
-        // Record offer and acceptance from this party
+        // Record this party's offer and acceptance
         if (msg.myOffer) pt.players[fromId] = msg.myOffer;
         if (!pt.acceptances) pt.acceptances = {};
         pt.acceptances[fromId] = true;
 
         const pA = pt.fromId, pB = pt.targetId;
         const bothAccepted = pt.acceptances[pA] && pt.acceptances[pB];
-        const bothHaveOffers = pt.players[pA] && pt.players[pB];
+        const EMPTY_OFFER = { money: 0, troops: 0, aerial: 0, naval: 0, missiles: 0 };
 
-        if (bothAccepted && bothHaveOffers) {
-          NEG._executeTrade(pA, pB, pt.players[pA], pt.players[pB], game);
+        if (bothAccepted) {
+          const offerA = pt.players[pA] || EMPTY_OFFER;
+          const offerB = pt.players[pB] || EMPTY_OFFER;
+          NEG._executeTrade(pA, pB, offerA, offerB, game);
           delete game._pendingTrades[id];
           bcastState();
           const doneMsg = { type: 'NEG_TRADE', sub: 'done' };
@@ -830,7 +835,7 @@ const NEG = {
 
       } else if (sub === 'open') {
         // Target receives open signal — open trade window (host-side dispatch for host-is-target case)
-        NEG.openTrade(fromId, !!msg.initiator);
+        NEG.openTrade(fromId, !!msg.initiator, id);
 
       } else if (sub === 'done') {
         NEG.tradeCompleted({});

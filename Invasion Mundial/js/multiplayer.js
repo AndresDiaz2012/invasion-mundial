@@ -623,6 +623,11 @@ const MP = {
               if (pb) { pb.textContent = '✏️ Actualizar oferta'; pb.disabled = false; }
               if (typeof UI !== 'undefined') UI.showToast(`🔄 ${nd.fromFlag || ''} ${nd.fromName || ''} pide que mejores tu oferta.`, 'warning');
             }
+            else if (nd.sub === 'partner_accepted') {
+              if (typeof UI !== 'undefined') UI.showToast(`✅ ${nd.fromFlag || ''} ${nd.fromName || ''} aceptó el comercio. ¡Confirma tu parte!`, 'success');
+              const ab = document.getElementById('trade-btn-accept');
+              if (ab) { ab.disabled = false; ab.style.background = '#27ae60'; ab.textContent = '✅ Confirmar Comercio'; }
+            }
             else if (nd.sub === 'request') {
               MP_UI.showDipRequest({
                 icon: '🤝', reqId: 'trade_req_' + nd.fromId,
@@ -1219,11 +1224,16 @@ const MP_GAME = {
       if (this._clientTimerSecs > 0) this._clientTimerSecs--;
       const el = document.getElementById('hud-timer');
       if (el) {
-        const m = Math.floor(this._clientTimerSecs / 60);
-        const s = this._clientTimerSecs % 60;
-        el.textContent = `${m}:${s.toString().padStart(2, '0')}`;
-        el.style.color = this._clientTimerSecs < 60 ? '#ff4444'
-          : this._clientTimerSecs < 180 ? '#c9a227' : '';
+        if (this._clientTimerSecs <= 0) {
+          el.textContent = 'Nuevo año...';
+          el.style.color = '#c9a227';
+        } else {
+          const m = Math.floor(this._clientTimerSecs / 60);
+          const s = this._clientTimerSecs % 60;
+          el.textContent = `${m}:${s.toString().padStart(2, '0')}`;
+          el.style.color = this._clientTimerSecs < 60 ? '#ff4444'
+            : this._clientTimerSecs < 180 ? '#c9a227' : '';
+        }
       }
     }, 1000);
   },

@@ -23,13 +23,26 @@
     timerInterval = setInterval(() => {
       if (timerPaused) return;
       timerSeconds--;
-      // Tick mensual cada 60 segundos (meses 1-11; el 12º lo cierra doNextTurn)
-      if (timerSeconds > 0 && (_lastMonthTick - timerSeconds) >= 60) {
+      // Tick mensual cada 60 segundos (todos los 12 meses, incluyendo diciembre)
+      if ((_lastMonthTick - timerSeconds) >= 60) {
         _lastMonthTick = timerSeconds;
         if (UI.game && !UI.game.gameOver) {
           // MP host: capture AI animations during monthly tick and broadcast to all clients
           if (typeof MP !== 'undefined' && MP.enabled && MP.isHost) {
             const aiAnimQueue = MP_GAME._captureAnim(() => { UI.game.nextMonth(); });
+            // Give each MP client player their monthly income
+            if (MP_GAME.game?.playerCountries) {
+              const hostId = UI.game.playerCountryId;
+              for (const cId of Object.keys(MP_GAME.game.playerCountries)) {
+                if (cId === hostId) continue;
+                const saved = MP_GAME.game.playerCountryId;
+                MP_GAME.game.playerCountryId = cId;
+                const annual = MP_GAME.game._calcIncome();
+                MP_GAME.game.playerCountryId = saved;
+                MP_GAME.game.playerTreasuries = MP_GAME.game.playerTreasuries || {};
+                MP_GAME.game.playerTreasuries[cId] = (MP_GAME.game.playerTreasuries[cId] || 0) + Math.round(annual / 12);
+              }
+            }
             UI.refresh();
             MP._bcastState();
             if (aiAnimQueue.length) MP._bcast({ type: 'ANIM_EVENT', animQueue: aiAnimQueue });
